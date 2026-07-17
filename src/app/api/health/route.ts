@@ -4,7 +4,8 @@ export async function GET() {
     status: "healthy",
     ready: true,
     database: databaseConfigured ? "configured" : "sandbox-fallback",
-    model: process.env.OPENAI_API_KEY ? "configured" : "deterministic-sandbox",
+    intakeModel: process.env.GEMINI_API_KEY ? "gemini-configured" : "manual-entry-fallback",
+    controller: "deterministic-sandbox",
     timestamp: new Date().toISOString(),
   });
 }

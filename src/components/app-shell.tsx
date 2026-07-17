@@ -11,6 +11,7 @@ import {
   Gauge,
   Menu,
   Network,
+  Plus,
   Settings,
   ShieldCheck,
   TicketCheck,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 
 const nav = [
+  { href: "/intake", label: "New Case", icon: Plus },
   { href: "/dashboard", label: "Command", icon: Gauge },
   { href: "/tickets", label: "Cases", icon: TicketCheck },
   { href: "/operations", label: "Optimizer", icon: Network },
@@ -80,8 +82,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Activity size={14} />
           </div>
           <div>
-            <span>DETERMINISTIC SANDBOX</span>
-            <small>No model call · auditable</small>
+            <span>BOUNDED SANDBOX</span>
+            <small>Gemini intake · typed execution</small>
           </div>
         </div>
       </aside>

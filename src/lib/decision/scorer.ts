@@ -1,4 +1,6 @@
 import { scoringWeights } from "@/lib/config";
+import { getPlaybook } from "@/lib/agent/playbooks";
+import { evaluatePolicy } from "@/lib/policy/evaluator";
 import type { ActionType, CandidateAction, EvidenceItem, Ticket } from "@/lib/types";
 
 const replacementActions: ActionType[] = ["PRIORITY_REPLACEMENT", "STANDARD_REPLACEMENT"];
@@ -24,15 +26,7 @@ function costFor(action: ActionType, ticket: Ticket) {
 }
 
 export function generateCandidates(ticket: Ticket, evidence: EvidenceItem[]): CandidateAction[] {
-  const actions: ActionType[] = [
-    "PRIORITY_REPLACEMENT",
-    "STANDARD_REPLACEMENT",
-    "FULL_REFUND",
-    "PARTIAL_REFUND",
-    "WAIT_AND_MONITOR",
-    "COURIER_INVESTIGATION",
-    "HUMAN_ESCALATION",
-  ];
+  const actions = getPlaybook(ticket.incident).candidates;
   return actions.map((action, index) =>
     scoreCandidate(ticket, action, evidence, `A-${String(index + 1).padStart(2, "0")}`)
   );
@@ -45,20 +39,10 @@ export function scoreCandidate(
   id = "A-CF"
 ): CandidateAction {
   const isReplacement = replacementActions.includes(action);
-  const inventoryValid = !isReplacement || ticket.inventory > 0;
-  const inactivityValid =
-    ticket.incident !== "DELAYED_DELIVERY" ||
-    ticket.inactiveDays >= 5 ||
-    action === "WAIT_AND_MONITOR" ||
-    action === "HUMAN_ESCALATION";
-  const duplicateValid =
-    ticket.incident !== "DUPLICATE_CHARGE" ||
-    action === "FULL_REFUND" ||
-    action === "HUMAN_ESCALATION";
-  const valid = inventoryValid && inactivityValid && duplicateValid;
+  const policy = evaluatePolicy(ticket, action);
+  const valid = policy.permitted;
   const estimatedCost = costFor(action, ticket);
-  const requiresApproval =
-    (action.includes("REFUND") && estimatedCost > 5000) || ticket.orderValue > 50000;
+  const requiresApproval = policy.requiresApproval || ticket.orderValue > 50000;
   const values = {
     customerGoalSatisfaction: goalFit(action, ticket),
     policyCompliance: valid ? 1 : 0,
@@ -107,11 +91,7 @@ export function scoreCandidate(
         )
       )
     : 0;
-  const rejectionReasons = [
-    !inventoryValid ? "Replacement inventory is zero." : "",
-    !inactivityValid ? "Tracking inactivity has not reached the policy threshold." : "",
-    !duplicateValid ? "Duplicate-payment policy restricts the remedy to refund or escalation." : "",
-  ].filter(Boolean);
+  const rejectionReasons = policy.reasons;
   return {
     id,
     action,
@@ -121,10 +101,10 @@ export function scoreCandidate(
     policyChecks: [
       {
         id: `${id}-PC1`,
-        policyId: "P-02",
-        clause: "§4.2",
-        description: "Five inactive days and available replacement inventory",
-        passed: inventoryValid && inactivityValid,
+        policyId: policy.clauses[0]?.split(" ")[0] ?? "P-01",
+        clause: policy.clauses[0]?.split(" ")[1] ?? "§1.1",
+        description: "Incident playbook eligibility and required operational facts",
+        passed: policy.permitted,
         evidenceIds: ["E-03", "E-04"],
       },
       {

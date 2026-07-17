@@ -1,0 +1,1 @@
+ALTER TABLE "case_intakes" ADD COLUMN "parse_metadata" jsonb NOT NULL;

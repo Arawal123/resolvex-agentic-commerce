@@ -1,18 +1,25 @@
 import Link from "next/link";
-import { ArrowUpRight, Filter, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowUpRight, Filter, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { PageTitle } from "@/components/app-shell";
 import { Reveal } from "@/components/ui/reveal";
-import { tickets } from "@/lib/demo-data";
+import { listTickets } from "@/lib/tickets/repository";
 
-export default function TicketsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TicketsPage() {
+  const tickets = await listTickets();
   return (
     <div className="page-canvas">
       <Reveal>
         <PageTitle
-          eyebrow="CASE INTAKE · 37 OPEN"
+          eyebrow={`CASE INTAKE · ${tickets.length} VISIBLE`}
           title="Human problems, machine clarity."
           description="Priority-ranked incidents with policy, SLA, and approval context visible before the agent moves."
-        />
+        >
+          <Link href="/intake" className="intake-launch">
+            <Plus size={16} /> New manual case
+          </Link>
+        </PageTitle>
       </Reveal>
       <Reveal delay={0.08} className="queue-controls">
         <label>
@@ -44,7 +51,7 @@ export default function TicketsPage() {
               <div className="ticket-tags">
                 <span>{ticket.incident.replaceAll("_", " ")}</span>
                 <span className={ticket.urgency}>{ticket.urgency}</span>
-                <span>{ticket.status}</span>
+                <span>{ticket.source === "manual" ? "MANUAL INTAKE" : ticket.status}</span>
               </div>
             </div>
             <div className="ticket-risk">

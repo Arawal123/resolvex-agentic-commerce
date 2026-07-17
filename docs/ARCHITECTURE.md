@@ -48,7 +48,7 @@ flowchart TB
   V --> N[Next.js App Router]
   N --> F[Node Serverless Functions]
   F --> P[(External PostgreSQL)]
-  F --> O[OpenAI Responses API optional]
+  F --> G[Gemini structured intake optional]
   F --> X[Production commerce connectors]
   M[Environment variables] --> F
 ```

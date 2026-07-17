@@ -18,6 +18,7 @@ ResolveX never exposes hidden chain-of-thought. It produces a structured Decisio
 
 - Cinematic landing experience and executive command plane
 - Ranked support queue and end-to-end live agent run
+- Manual-input workflow with Gemini structured extraction, editable evidence review, and streamed execution
 - Decision Studio with evidence, policies, candidates, factor attribution, counterfactuals, tool receipts, verification, interrogation, and JSON export
 - Constrained operations optimizer with global budget and inventory allocation
 - Human approval queue with approve, reject, modify, operator notes, and resume attribution
@@ -31,8 +32,9 @@ ResolveX never exposes hidden chain-of-thought. It produces a structured Decisio
 ```mermaid
 flowchart LR
   UI[Next.js Control Plane] --> API[Node Route Handlers]
-  API --> C[Agent Controller]
-  C --> L[Optional OpenAI Responses API]
+  API --> G[Gemini structured intake]
+  API --> C[Deterministic Agent Controller]
+  G --> C
   C --> P[Deterministic Policy + Scoring]
   C --> T[Zod Tool Registry]
   T --> DB[(PostgreSQL / Drizzle)]
@@ -81,8 +83,8 @@ npm run test:e2e
 | Variable                    |   Required | Purpose                                                                        |
 | --------------------------- | ---------: | ------------------------------------------------------------------------------ |
 | `DATABASE_URL`              | Production | PostgreSQL connection string; local UI falls back to transparent sandbox state |
-| `OPENAI_API_KEY`            |         No | Enables live hybrid planning; never exposed to the browser                     |
-| `OPENAI_MODEL`              |         No | Model name for live mode                                                       |
+| `GEMINI_API_KEY`            |         No | Server-only language extraction; manual structured entry is the fallback       |
+| `GEMINI_MODEL`              |         No | Intake model; defaults to `gemini-3.5-flash`                                   |
 | `APP_URL`                   | Production | Canonical deployment URL                                                       |
 | `DEMO_MODE`                 |         No | Enables deterministic synthetic demo data                                      |
 | `AUTONOMY_LEVEL`            |         No | `recommend`, `low-risk`, `bounded`, or `sandbox`                               |
@@ -95,7 +97,7 @@ npm run test:e2e
 2. Select **Next.js**; root directory is the repository root.
 3. Use Node.js **22.x**, Install Command `npm ci`, Build Command `npm run build`, and Output Directory **Next.js default**.
 4. Provision Neon, Supabase Postgres, or Vercel Marketplace Postgres. Add `DATABASE_URL` to Production, Preview, and Development.
-5. Add `APP_URL`, `DEMO_MODE=true`, `AUTONOMY_LEVEL=bounded`, monetary limits, and optionally the server-only `OPENAI_API_KEY` and `OPENAI_MODEL`.
+5. Add `APP_URL`, `DEMO_MODE=true`, `AUTONOMY_LEVEL=bounded`, monetary limits, and optionally the server-only `GEMINI_API_KEY` and `GEMINI_MODEL`.
 6. Run migrations against production before promotion: `npm run db:migrate`; seed only the hackathon/demo environment.
 7. Deploy. `/api/health` should return `status: healthy`.
 
@@ -134,6 +136,6 @@ The bundled operational integrations are deterministic sandbox adapters. Product
 
 ## Suggested GitHub topics
 
-`agentic-ai` · `explainable-ai` · `nextjs` · `openai` · `ecommerce` · `operations` · `drizzle` · `vercel` · `hackathon`
+`agentic-ai` · `explainable-ai` · `nextjs` · `gemini` · `ecommerce` · `operations` · `drizzle` · `vercel`
 
 Licensed under the MIT License.

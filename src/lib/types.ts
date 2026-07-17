@@ -6,7 +6,8 @@ export type IncidentType =
   | "LOST_SHIPMENT"
   | "OUT_OF_STOCK"
   | "DUPLICATE_CHARGE"
-  | "DELIVERY_FAILURE";
+  | "DELIVERY_FAILURE"
+  | "UNSUPPORTED_REQUEST";
 
 export type ActionType =
   | "WAIT_AND_MONITOR"
@@ -46,7 +47,68 @@ export interface Ticket {
   priority: number;
   churnRisk: number;
   trackingStatus: string;
+  source?: "seed" | "manual";
+  parseConfidence?: number;
+  operationalFacts?: OperationalFacts;
 }
+
+export type PaymentStatus = "captured" | "pending" | "refunded" | "failed" | "unknown";
+export type ItemCondition = "normal" | "damaged" | "wrong_item" | "unknown";
+
+export interface OperationalFacts {
+  paymentStatus: PaymentStatus | null;
+  duplicateChargeVerified: boolean | null;
+  itemCondition: ItemCondition | null;
+  withinReturnWindow: boolean | null;
+  deliveryAttempts: number | null;
+}
+
+export type MissingCaseField =
+  | "incident"
+  | "customerName"
+  | "orderValue"
+  | "inventory"
+  | "inactiveDays"
+  | "trackingStatus"
+  | "paymentStatus"
+  | "duplicateChargeVerified"
+  | "itemCondition"
+  | "withinReturnWindow";
+
+export interface ManualCaseDraft {
+  rawMessage: string;
+  subject: string;
+  orderId: string | null;
+  customerId: string | null;
+  customerName: string;
+  incident: IncidentType | null;
+  urgency: Ticket["urgency"];
+  requestedOutcome: Ticket["requestedOutcome"];
+  slaHours: number | null;
+  orderValue: number | null;
+  inventory: number | null;
+  inactiveDays: number | null;
+  trackingStatus: string | null;
+  operationalFacts: OperationalFacts;
+}
+
+export interface IntakeParseResult {
+  draft: ManualCaseDraft;
+  confidence: number;
+  missingFields: MissingCaseField[];
+  provider: "gemini" | "manual";
+  model: string;
+  warnings: string[];
+  manualEntryAllowed: boolean;
+}
+
+export type AgentEvent =
+  | { type: "phase"; phase: AgentPhase; title: string; detail: string }
+  | { type: "tool"; trace: ToolTrace }
+  | { type: "approval"; ticketId: string; reason: string }
+  | { type: "verification"; result: VerificationResult }
+  | { type: "complete"; decision: DecisionRecord }
+  | { type: "error"; code: string; message: string };
 
 export interface PolicyCheck {
   id: string;

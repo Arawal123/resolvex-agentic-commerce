@@ -16,6 +16,10 @@ export default defineConfig({
     : {
         command: "npm run dev",
         url: "http://127.0.0.1:3000",
+        env: {
+          GEMINI_API_KEY: process.env.PLAYWRIGHT_GEMINI_API_KEY ?? "",
+          GEMINI_DISABLED: process.env.PLAYWRIGHT_GEMINI_API_KEY ? "false" : "true",
+        },
         reuseExistingServer: !process.env.CI,
         timeout: 120000,
       },

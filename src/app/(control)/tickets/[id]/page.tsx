@@ -3,11 +3,19 @@ import { ArrowLeft, Box, CalendarClock, MapPin, PackageCheck, Star, UserRound } 
 import Link from "next/link";
 import { AgentRunPanel } from "@/components/agent/agent-run-panel";
 import { Reveal } from "@/components/ui/reveal";
-import { tickets } from "@/lib/demo-data";
+import { getTicket } from "@/lib/tickets/repository";
 
-export default async function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const ticket = tickets.find((item) => item.id === id);
+export const dynamic = "force-dynamic";
+
+export default async function TicketDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ autorun?: string }>;
+}) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const ticket = await getTicket(id);
   if (!ticket) notFound();
   return (
     <div className="page-canvas ticket-detail">
@@ -43,7 +51,11 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               <span>CUSTOMER SIGNAL</span>
             </div>
             <h2>{ticket.customerName}</h2>
-            <p>Black tier customer · 17 lifetime orders · low anomaly risk</p>
+            <p>
+              {ticket.source === "manual"
+                ? "Operator-reviewed manual intake"
+                : "Black tier customer · synthetic fixture"}
+            </p>
             <div className="context-stats">
               <span>
                 <Star /> Priority <b>{Math.round(ticket.priority * 100)}</b>
@@ -59,14 +71,14 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               <span>FULFILLMENT STATE</span>
             </div>
             <h2>{ticket.trackingStatus}</h2>
-            <p>Last carrier scan · synthetic authoritative demo dataset</p>
+            <p>Last reviewed operational snapshot · typed sandbox evidence</p>
             <div className="route-line">
               <span>
-                <PackageCheck /> Jaipur FC
+                <PackageCheck /> Fulfillment
               </span>
               <i />
               <span>
-                <MapPin /> Pune Hub
+                <MapPin /> Carrier
               </span>
               <i className="failed" />
               <span>Customer</span>
@@ -77,20 +89,21 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ i
               <span>CONVERSATION</span>
             </div>
             <div>
-              <small>CUSTOMER · 09:14</small>
+              <small>CUSTOMER · INTAKE</small>
               <p>{ticket.message}</p>
             </div>
             <div className="system-message">
-              <small>RESOLVEX INTAKE · 09:14</small>
+              <small>RESOLVEX · REVIEWED FACTS</small>
               <p>
-                Goal extracted: preserve product outcome. Constraint detected: delivery deadline.
-                Missing evidence will be retrieved through allowlisted tools.
+                Goal: {ticket.requestedOutcome}. Incident:{" "}
+                {ticket.incident.replaceAll("_", " ").toLowerCase()}. The controller can use only
+                allowlisted, schema-validated tools.
               </p>
             </div>
           </section>
         </Reveal>
         <Reveal delay={0.16}>
-          <AgentRunPanel ticket={ticket} />
+          <AgentRunPanel ticket={ticket} autoStart={query.autorun === "1"} />
         </Reveal>
       </div>
     </div>

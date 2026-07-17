@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { PageTitle } from "@/components/app-shell";
 import { Reveal } from "@/components/ui/reveal";
-import { operationalMetrics, tickets } from "@/lib/demo-data";
+import { operationalMetrics } from "@/lib/demo-data";
+import { listTickets } from "@/lib/tickets/repository";
 
 const metrics = [
   {
@@ -45,7 +46,10 @@ const metrics = [
   },
 ];
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const tickets = await listTickets();
   return (
     <div className="page-canvas dashboard-canvas">
       <Reveal>

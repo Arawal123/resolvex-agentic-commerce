@@ -15,7 +15,7 @@
 
 Use an external, pooled, Vercel-compatible PostgreSQL provider such as Neon or Supabase. Production does not use SQLite or local files. Run `npm run db:migrate` against the target database before promoting the deployment.
 
-Production variables: `DATABASE_URL`, `APP_URL`, `DEMO_MODE`, `AUTONOMY_LEVEL`, `MAX_AUTONOMOUS_REFUND_INR`, `MAX_BATCH_BUDGET_INR`, `AGENT_MAX_STEPS`, and `AGENT_MAX_RETRIES`. `OPENAI_API_KEY` and `OPENAI_MODEL` are optional; without them the app visibly enters deterministic sandbox mode. Never prefix secrets with `NEXT_PUBLIC_`.
+Production variables: `DATABASE_URL`, `APP_URL`, `DEMO_MODE`, `AUTONOMY_LEVEL`, `MAX_AUTONOMOUS_REFUND_INR`, `MAX_BATCH_BUDGET_INR`, `AGENT_MAX_STEPS`, and `AGENT_MAX_RETRIES`. `GEMINI_API_KEY` and `GEMINI_MODEL` are optional; without them `/intake` exposes structured manual entry. Gemini is used only for language extraction and never receives write tools. Never prefix secrets with `NEXT_PUBLIC_`.
 
 ## Git integration
 
@@ -28,6 +28,8 @@ npm i -g vercel@latest
 vercel login
 vercel link
 vercel env add DATABASE_URL production
+vercel env add GEMINI_API_KEY production
+vercel env add GEMINI_MODEL production
 vercel deploy
 vercel deploy --prod
 ```

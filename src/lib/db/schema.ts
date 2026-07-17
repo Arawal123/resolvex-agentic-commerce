@@ -167,6 +167,47 @@ export const ticketMessages = pgTable("ticket_messages", {
   body: text("body").notNull(),
   ...timestamps,
 });
+export const caseIntakes = pgTable(
+  "case_intakes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    externalTicketId: text("external_ticket_id").notNull().unique(),
+    rawInput: text("raw_input").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    confidence: numeric("confidence", { precision: 5, scale: 4 }).notNull(),
+    missingFields: jsonb("missing_fields").notNull(),
+    extractedDraft: jsonb("extracted_draft").notNull(),
+    parseMetadata: jsonb("parse_metadata").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("case_intakes_created_idx").on(table.createdAt)]
+);
+export const caseOperationalFacts = pgTable(
+  "case_operational_facts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    intakeId: uuid("intake_id")
+      .references(() => caseIntakes.id, { onDelete: "cascade" })
+      .notNull()
+      .unique(),
+    externalTicketId: text("external_ticket_id").notNull().unique(),
+    ticketPayload: jsonb("ticket_payload").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("case_facts_ticket_idx").on(table.externalTicketId)]
+);
+export const caseDecisionRecords = pgTable(
+  "case_decision_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    externalDecisionId: text("external_decision_id").notNull().unique(),
+    externalTicketId: text("external_ticket_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    ...timestamps,
+  },
+  (table) => [index("case_decisions_ticket_idx").on(table.externalTicketId)]
+);
 export const policies = pgTable("policies", {
   id: uuid("id").defaultRandom().primaryKey(),
   code: text("code").notNull().unique(),

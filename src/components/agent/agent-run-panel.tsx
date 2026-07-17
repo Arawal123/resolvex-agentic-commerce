@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
@@ -9,33 +9,111 @@ import {
   LoaderCircle,
   Play,
   ShieldCheck,
+  Sparkles,
   Wrench,
 } from "lucide-react";
-import type { DecisionRecord, Ticket } from "@/lib/types";
+import type { AgentEvent, DecisionRecord, Ticket } from "@/lib/types";
 
-export function AgentRunPanel({ ticket }: { ticket: Ticket }) {
+const phaseNumber: Record<string, string> = {
+  OBSERVE: "01",
+  PLAN: "02",
+  ACT: "03",
+  VERIFY: "04",
+  EXPLAIN: "05",
+  COMPLETE: "06",
+};
+
+function eventCopy(event: AgentEvent) {
+  if (event.type === "phase")
+    return { phase: event.phase, title: event.title, detail: event.detail };
+  if (event.type === "tool")
+    return {
+      phase: event.trace.phase,
+      title: event.trace.name.replace(/([a-z])([A-Z])/g, "$1 $2"),
+      detail: `${event.trace.status} · ${event.trace.latencyMs}ms · typed tool receipt ${event.trace.id}`,
+    };
+  if (event.type === "verification")
+    return {
+      phase: "VERIFY",
+      title: event.result.check,
+      detail: event.result.passed ? "Independent read-back passed." : event.result.detail,
+    };
+  if (event.type === "approval")
+    return { phase: "ACT", title: "Human approval boundary", detail: event.reason };
+  if (event.type === "error") return { phase: "RECOVER", title: event.code, detail: event.message };
+  return { phase: "COMPLETE", title: "Decision record sealed", detail: event.decision.summary };
+}
+
+function pause(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+export function AgentRunPanel({
+  ticket,
+  autoStart = false,
+}: {
+  ticket: Ticket;
+  autoStart?: boolean;
+}) {
   const [decision, setDecision] = useState<DecisionRecord | null>(null);
+  const [events, setEvents] = useState<AgentEvent[]>([]);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
-  async function run() {
+  const autoStarted = useRef(false);
+
+  const run = useCallback(async () => {
+    if (running) return;
     setRunning(true);
     setError("");
     setDecision(null);
+    setEvents([]);
     try {
-      const response = await fetch("/api/agent/run", {
+      const response = await fetch("/api/agent/run/stream", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({ ticketId: ticket.id }),
       });
-      const data = await response.json();
-      if (!data.ok) throw new Error(data.message);
-      setDecision(data.decision);
+      if (!response.ok || !response.body)
+        throw new Error("The execution stream could not be opened.");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const packets = buffer.split("\n\n");
+        buffer = packets.pop() ?? "";
+        for (const packet of packets) {
+          const dataLine = packet.split("\n").find((line) => line.startsWith("data: "));
+          if (!dataLine) continue;
+          const event = JSON.parse(dataLine.slice(6)) as AgentEvent;
+          setEvents((current) => [...current, event]);
+          if (event.type === "complete") setDecision(event.decision);
+          if (event.type === "error") throw new Error(event.message);
+          await pause(event.type === "tool" ? 145 : 260);
+        }
+        if (done) break;
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Run failed");
     } finally {
       setRunning(false);
     }
-  }
+  }, [running, ticket.id]);
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    const key = `resolvex:autorun:${ticket.id}`;
+    if (sessionStorage.getItem(key)) return;
+    const timer = window.setTimeout(() => {
+      if (autoStarted.current) return;
+      autoStarted.current = true;
+      sessionStorage.setItem(key, "started");
+      void run();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [autoStart, run, ticket.id]);
+
   return (
     <section className="agent-console" aria-live="polite">
       <div className="console-head">
@@ -52,34 +130,63 @@ export function AgentRunPanel({ ticket }: { ticket: Ticket }) {
           {running ? "Agent operating…" : decision ? "Run again safely" : "Run agent"}
         </button>
       </div>
-      {!decision && !running && (
+      {!decision && !running && events.length === 0 && (
         <div className="agent-idle">
           <div className="idle-core">
             <CircleDot />
           </div>
           <p>Controller armed</p>
-          <span>The model may propose. Deterministic policy code decides what can execute.</span>
+          <span>
+            Gemini may extract language. Deterministic policy code decides what can execute.
+          </span>
         </div>
       )}
-      {running && (
-        <div className="live-run">
-          <div className="phase-rail">
-            {["OBSERVE", "PLAN", "ACT", "VERIFY", "EXPLAIN"].map((phase, index) => (
-              <div key={phase} style={{ animationDelay: `${index * 0.45}s` }}>
-                <span>{index + 1}</span>
-                {phase}
-              </div>
-            ))}
+      {(running || events.length > 0) && (
+        <div className="cinematic-run">
+          <div className="run-horizon">
+            <i />
+            <span>{running ? "LIVE EXECUTION" : "TRACE SEALED"}</span>
+            <i />
           </div>
-          <div className="scan-line" />
-          <p>
-            Retrieving minimum necessary evidence and evaluating policy-constrained alternatives…
-          </p>
+          <div className="event-cascade">
+            {events
+              .filter((event) => event.type !== "complete")
+              .map((event, index) => {
+                const copy = eventCopy(event);
+                const latest =
+                  index === events.filter((item) => item.type !== "complete").length - 1;
+                return (
+                  <article
+                    key={`${event.type}-${index}`}
+                    className={latest && running ? "latest" : ""}
+                  >
+                    <div className="event-coordinate">
+                      <span>{phaseNumber[copy.phase] ?? "·"}</span>
+                      <i />
+                    </div>
+                    <div>
+                      <small>{copy.phase}</small>
+                      <strong>{copy.title}</strong>
+                      <p>{copy.detail}</p>
+                    </div>
+                    <div className="event-state">
+                      {latest && running ? <Sparkles /> : <Check />}
+                    </div>
+                  </article>
+                );
+              })}
+            {running && (
+              <div className="next-event">
+                <LoaderCircle className="spin" />
+                <span>Awaiting the next signed controller event</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {error && <div className="error-state">{error}</div>}
-      {decision && (
-        <div className="run-result">
+      {decision && !running && (
+        <div className="run-result cinematic-result">
           <div className="decision-flare">
             <div>
               <small>
@@ -93,20 +200,6 @@ export function AgentRunPanel({ ticket }: { ticket: Ticket }) {
               <b>{Math.round(decision.confidence * 100)}</b>
               <span>confidence</span>
             </div>
-          </div>
-          <div className="trace-mini">
-            {decision.timeline.map((event) => (
-              <div key={event.id}>
-                <span>
-                  <Check size={12} />
-                </span>
-                <div>
-                  <small>{event.phase}</small>
-                  <strong>{event.title}</strong>
-                  <p>{event.detail}</p>
-                </div>
-              </div>
-            ))}
           </div>
           <div className="run-proof">
             <span>

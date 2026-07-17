@@ -9,7 +9,9 @@ export async function POST(request: Request) {
     const { ticketId } = z.object({ ticketId: z.string().min(1) }).parse(await request.json());
     return NextResponse.json({
       ok: true,
-      mode: process.env.OPENAI_API_KEY ? "live-hybrid" : "deterministic-sandbox",
+      mode: process.env.GEMINI_API_KEY
+        ? "gemini-intake/deterministic-engine"
+        : "deterministic-sandbox",
       decision: await runAgent(ticketId),
     });
   } catch (error) {

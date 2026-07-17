@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { tickets } from "@/lib/demo-data";
 import { optimizeBatch } from "@/lib/optimization/batch-optimizer";
+import { listTickets } from "@/lib/tickets/repository";
 
 export async function POST(request: Request) {
   const input = z
@@ -10,8 +10,13 @@ export async function POST(request: Request) {
       inventory: z.number().int().nonnegative().max(1000),
     })
     .parse(await request.json());
+  const tickets = await listTickets();
+  const eligibleTickets = tickets
+    .filter((ticket) => ticket.status !== "resolved")
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, 10);
   const plan = optimizeBatch({
-    tickets: tickets.filter((ticket) => ticket.status !== "resolved"),
+    tickets: eligibleTickets,
     budget: input.budget,
     inventory: input.inventory,
   });
@@ -24,14 +29,18 @@ export async function POST(request: Request) {
       {
         label: "Budget −20%",
         plan: optimizeBatch({
-          tickets,
+          tickets: eligibleTickets,
           budget: Math.round(input.budget * 0.8),
           inventory: input.inventory,
         }),
       },
       {
         label: "Inventory +5",
-        plan: optimizeBatch({ tickets, budget: input.budget, inventory: input.inventory + 5 }),
+        plan: optimizeBatch({
+          tickets: eligibleTickets,
+          budget: input.budget,
+          inventory: input.inventory + 5,
+        }),
       },
     ],
   });

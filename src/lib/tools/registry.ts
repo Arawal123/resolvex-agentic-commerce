@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { tickets } from "@/lib/demo-data";
+import {
+  getTicket,
+  getTicketByCustomerId,
+  getTicketByOrderId,
+  listTickets,
+} from "@/lib/tickets/repository";
 
 export type Permission = "support:read" | "operations:write" | "finance:write" | "verify:read";
 
@@ -34,6 +39,8 @@ const sandboxState = {
   inventoryReservations: new Map<string, number>(),
   messages: new Set<string>(),
   resolvedTickets: new Set<string>(),
+  courierInvestigations: new Set<string>(),
+  followUps: new Map<string, string>(),
 };
 
 export function defineTool<TSchema extends z.ZodType, TOutput extends Record<string, unknown>>(
@@ -91,8 +98,8 @@ const ticketInput = z.object({ ticketId: z.string().min(1) });
 const orderInput = z.object({ orderId: z.string().min(1) });
 const customerInput = z.object({ customerId: z.string().min(1) });
 
-function ticketById(ticketId: string) {
-  const ticket = tickets.find((item) => item.id === ticketId);
+async function ticketById(ticketId: string) {
+  const ticket = await getTicket(ticketId);
   if (!ticket) throw new Error("TICKET_NOT_FOUND");
   return ticket;
 }
@@ -101,7 +108,7 @@ const read = <T extends z.ZodType>(
   name: string,
   description: string,
   schema: T,
-  execute: (input: z.infer<T>) => Record<string, unknown>
+  execute: (input: z.infer<T>) => Promise<Record<string, unknown>> | Record<string, unknown>
 ) => defineTool({ name, description, permission: "support:read", schema, execute });
 
 export const toolRegistry = {
@@ -109,38 +116,55 @@ export const toolRegistry = {
     "getCustomerProfile",
     "Retrieve customer profile and service tier",
     customerInput,
-    ({ customerId }) => ({
-      customerId,
-      tier: "Black",
-      lifetimeOrders: 17,
-      lifetimeValue: 128400,
-      anomalyRisk: 0.08,
-    })
+    async ({ customerId }) => {
+      const ticket = await getTicketByCustomerId(customerId);
+      return {
+        customerId,
+        name: ticket?.customerName ?? "Unknown customer",
+        tier: ticket?.source === "manual" ? "Standard" : "Black",
+        lifetimeOrders: ticket?.source === "manual" ? 1 : 17,
+        lifetimeValue: ticket?.orderValue ?? 0,
+        anomalyRisk: ticket?.incident === "UNSUPPORTED_REQUEST" ? 0.5 : 0.08,
+      };
+    }
   ),
   getOrderDetails: read(
     "getOrderDetails",
     "Retrieve immutable order details",
     orderInput,
-    ({ orderId }) => ({
-      orderId,
-      currency: "INR",
-      captured: true,
-      fulfillment: "shipped",
-      synthetic: true,
-    })
+    async ({ orderId }) => {
+      const ticket = await getTicketByOrderId(orderId);
+      const payment = ticket?.operationalFacts?.paymentStatus ?? "captured";
+      return {
+        orderId,
+        currency: "INR",
+        total: ticket?.orderValue ?? 0,
+        captured: payment === "captured",
+        paymentStatus: payment,
+        fulfillment: ticket?.trackingStatus ?? "unknown",
+        synthetic: true,
+      };
+    }
   ),
   getPaymentStatus: read(
     "getPaymentStatus",
     "Retrieve payment ledger state",
     orderInput,
-    ({ orderId }) => ({ orderId, state: "captured", duplicateDetected: false })
+    async ({ orderId }) => {
+      const ticket = await getTicketByOrderId(orderId);
+      return {
+        orderId,
+        state: ticket?.operationalFacts?.paymentStatus ?? "unknown",
+        duplicateDetected: ticket?.operationalFacts?.duplicateChargeVerified ?? false,
+      };
+    }
   ),
   getTrackingHistory: read(
     "getTrackingHistory",
     "Retrieve shipment event history",
     ticketInput,
-    ({ ticketId }) => {
-      const t = ticketById(ticketId);
+    async ({ ticketId }) => {
+      const t = await ticketById(ticketId);
       return {
         shipmentId: `SHP-${t.orderId.slice(4)}`,
         inactiveDays: t.inactiveDays,
@@ -153,8 +177,8 @@ export const toolRegistry = {
     "checkInventory",
     "Check sellable replacement inventory",
     ticketInput,
-    ({ ticketId }) => {
-      const t = ticketById(ticketId);
+    async ({ ticketId }) => {
+      const t = await ticketById(ticketId);
       return { sku: `SKU-${t.orderId.slice(-3)}`, available: t.inventory, warehouse: "BLR-02" };
     }
   ),
@@ -168,11 +192,21 @@ export const toolRegistry = {
     "retrieveRelevantPolicies",
     "Retrieve applicable versioned policy clauses",
     ticketInput,
-    ({ ticketId }) => ({
-      ticketId,
-      policies: ["P-02 §4.2", "P-05 §2.1", "P-14 §5.4"],
-      policyVersion: "2026.07",
-    })
+    async ({ ticketId }) => {
+      const ticket = await ticketById(ticketId);
+      const byIncident = {
+        DELAYED_DELIVERY: ["P-02 §4.2", "P-05 §2.1", "P-14 §5.4"],
+        DAMAGED_PRODUCT: ["P-08 §3.3", "P-05 §2.1"],
+        WRONG_PRODUCT: ["P-08 §3.6", "P-05 §2.1"],
+        RETURN_REQUEST: ["P-09 §2.2", "P-05 §2.1"],
+        LOST_SHIPMENT: ["P-02 §5.1", "P-05 §2.1"],
+        OUT_OF_STOCK: ["P-06 §1.4", "P-05 §2.1"],
+        DUPLICATE_CHARGE: ["P-11 §1.2", "P-05 §2.1"],
+        DELIVERY_FAILURE: ["P-02 §6.2", "P-14 §5.4"],
+        UNSUPPORTED_REQUEST: ["P-01 §1.1"],
+      } as const;
+      return { ticketId, policies: byIncident[ticket.incident], policyVersion: "2026.07" };
+    }
   ),
   getShippingOptions: read(
     "getShippingOptions",
@@ -202,8 +236,10 @@ export const toolRegistry = {
     "getOpenTickets",
     "Retrieve eligible open tickets",
     z.object({ limit: z.number().int().min(1).max(250).default(50) }),
-    ({ limit }) => ({
-      tickets: tickets.filter((ticket) => ticket.status !== "resolved").slice(0, limit),
+    async ({ limit }) => ({
+      tickets: (await listTickets())
+        .filter((ticket) => ticket.status !== "resolved")
+        .slice(0, limit),
     })
   ),
   calculateRefund: read(
@@ -255,8 +291,8 @@ export const toolRegistry = {
     description: "Reserve sellable inventory transactionally",
     permission: "operations:write",
     schema: z.object({ ticketId: z.string(), quantity: z.number().int().positive() }),
-    execute: ({ ticketId, quantity }) => {
-      const ticket = ticketById(ticketId);
+    execute: async ({ ticketId, quantity }) => {
+      const ticket = await ticketById(ticketId);
       if (ticket.inventory < quantity) throw new Error("INSUFFICIENT_INVENTORY");
       sandboxState.inventoryReservations.set(ticketId, quantity);
       return { reservationId: `RSV-${ticketId.slice(4)}`, quantity, state: "reserved" };
@@ -320,7 +356,10 @@ export const toolRegistry = {
     description: "Open courier trace investigation",
     permission: "operations:write",
     schema: ticketInput,
-    execute: ({ ticketId }) => ({ investigationId: `INV-${ticketId.slice(4)}`, state: "open" }),
+    execute: ({ ticketId }) => {
+      sandboxState.courierInvestigations.add(ticketId);
+      return { investigationId: `INV-${ticketId.slice(4)}`, state: "open" };
+    },
   }),
   notifyWarehouse: defineTool({
     name: "notifyWarehouse",
@@ -360,7 +399,10 @@ export const toolRegistry = {
     description: "Schedule a bounded verification follow-up",
     permission: "operations:write",
     schema: z.object({ ticketId: z.string(), at: z.string().datetime() }),
-    execute: (input) => ({ ...input, scheduled: true }),
+    execute: (input) => {
+      sandboxState.followUps.set(input.ticketId, input.at);
+      return { ...input, scheduled: true };
+    },
   }),
   resolveTicket: defineTool({
     name: "resolveTicket",
@@ -433,6 +475,26 @@ export const toolRegistry = {
       delivered: sandboxState.messages.has(ticketId),
     }),
   }),
+  verifyCourierInvestigation: defineTool({
+    name: "verifyCourierInvestigation",
+    description: "Verify courier investigation state",
+    permission: "verify:read",
+    schema: ticketInput,
+    execute: ({ ticketId }) => ({
+      verified: sandboxState.courierInvestigations.has(ticketId),
+      state: sandboxState.courierInvestigations.has(ticketId) ? "open" : "missing",
+    }),
+  }),
+  verifyFollowUp: defineTool({
+    name: "verifyFollowUp",
+    description: "Verify a scheduled operational follow-up",
+    permission: "verify:read",
+    schema: ticketInput,
+    execute: ({ ticketId }) => ({
+      verified: sandboxState.followUps.has(ticketId),
+      at: sandboxState.followUps.get(ticketId),
+    }),
+  }),
   verifyBatchExecution: defineTool({
     name: "verifyBatchExecution",
     description: "Verify each allocated batch action",
@@ -459,6 +521,8 @@ export function resetSandboxState() {
   sandboxState.inventoryReservations.clear();
   sandboxState.messages.clear();
   sandboxState.resolvedTickets.clear();
+  sandboxState.courierInvestigations.clear();
+  sandboxState.followUps.clear();
   idempotencyLedger.clear();
   auditEvents.length = 0;
 }
