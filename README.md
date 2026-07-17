@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ResolveX
 
-## Getting Started
+**Explainable Autonomous E-Commerce Operations Agent**
 
-First, run the development server:
+ResolveX is a genuinely agentic operations platform. It investigates commerce incidents through typed tools, evaluates policy-constrained alternatives with a deterministic scoring engine, executes real sandbox operations, verifies the resulting state independently, and seals every outcome in a contestable Decision Record.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+> Demo mode is deterministic, clearly labelled, and requires no model key. All bundled people, orders, messages, payments, and events are synthetic.
+
+## Why it is agentic
+
+The controller completes a closed loop: **Observe → Plan → Act → Verify → Recover or Complete → Explain**. The model can classify, plan, and propose candidates; it cannot mutate arbitrary data. Consequential state changes pass through a Zod-validated permissioned tool registry with idempotency keys, bounded retries, audit events, and separate verification tools.
+
+## Why its explanations are trustworthy
+
+ResolveX never exposes hidden chain-of-thought. It produces a structured Decision Record from observable material: evidence IDs, source records, exact policy clauses, candidate scores, factor contributions, rejection reasons, tool inputs and receipts, verification results, counterfactual reruns, and version identifiers. The “Ask About This Decision” panel retrieves only from that stored record.
+
+## Product surface
+
+- Cinematic landing experience and executive command plane
+- Ranked support queue and end-to-end live agent run
+- Decision Studio with evidence, policies, candidates, factor attribution, counterfactuals, tool receipts, verification, interrogation, and JSON export
+- Constrained operations optimizer with global budget and inventory allocation
+- Human approval queue with approve, reject, modify, operator notes, and resume attribution
+- Searchable dual-form policy library
+- Agency and explainability benchmark center with 40 deterministic scenarios
+- Versioned autonomy thresholds and visible scoring weights
+- PostgreSQL/Drizzle production schema plus no-key sandbox fallback
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[Next.js Control Plane] --> API[Node Route Handlers]
+  API --> C[Agent Controller]
+  C --> L[Optional OpenAI Responses API]
+  C --> P[Deterministic Policy + Scoring]
+  C --> T[Zod Tool Registry]
+  T --> DB[(PostgreSQL / Drizzle)]
+  T --> V[Independent Verification Tools]
+  P --> D[Decision Record]
+  V --> D
+  D --> UI
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Quick start
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Requirements: Node.js 20.19+ (Node 22 recommended), npm 10+, and optionally Docker Desktop for PostgreSQL.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+copy .env.example .env.local
+npm run dev
+```
 
-## Learn More
+Open `http://localhost:3000`, then select **Launch the live case**. The demo account is implicit in sandbox mode; no credentials are required.
 
-To learn more about Next.js, take a look at the following resources:
+### Full local PostgreSQL path
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up -d
+npm run db:generate
+npm run db:migrate
+npm run data:generate
+npm run db:seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Validation
 
-## Deploy on Vercel
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run evaluate
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Environment variables
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Variable                    |   Required | Purpose                                                                        |
+| --------------------------- | ---------: | ------------------------------------------------------------------------------ |
+| `DATABASE_URL`              | Production | PostgreSQL connection string; local UI falls back to transparent sandbox state |
+| `OPENAI_API_KEY`            |         No | Enables live hybrid planning; never exposed to the browser                     |
+| `OPENAI_MODEL`              |         No | Model name for live mode                                                       |
+| `APP_URL`                   | Production | Canonical deployment URL                                                       |
+| `DEMO_MODE`                 |         No | Enables deterministic synthetic demo data                                      |
+| `AUTONOMY_LEVEL`            |         No | `recommend`, `low-risk`, `bounded`, or `sandbox`                               |
+| `MAX_AUTONOMOUS_REFUND_INR` |         No | Financial approval boundary                                                    |
+| `MAX_BATCH_BUDGET_INR`      |         No | Batch confirmation boundary                                                    |
+
+## Vercel deployment
+
+1. Import `Arawal123/resolvex-agentic-commerce` in Vercel.
+2. Select **Next.js**; root directory is the repository root.
+3. Use Node.js **22.x**, Install Command `npm ci`, Build Command `npm run build`, and Output Directory **Next.js default**.
+4. Provision Neon, Supabase Postgres, or Vercel Marketplace Postgres. Add `DATABASE_URL` to Production, Preview, and Development.
+5. Add `APP_URL`, `DEMO_MODE=true`, `AUTONOMY_LEVEL=bounded`, monetary limits, and optionally the server-only `OPENAI_API_KEY` and `OPENAI_MODEL`.
+6. Run migrations against production before promotion: `npm run db:migrate`; seed only the hackathon/demo environment.
+7. Deploy. `/api/health` should return `status: healthy`.
+
+Every pull request receives a Vercel preview when Git integration is enabled. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete specification, rollout, and rollback procedure.
+
+## Repository map
+
+```text
+src/app              routes, pages, and server-side APIs
+src/components       cinematic product scenes and interactive workflows
+src/lib/agent        closed-loop controller and decision interrogation
+src/lib/tools        typed read, write, and verification tool registry
+src/lib/decision     scoring, validation, and counterfactual reruns
+src/lib/optimization constrained batch allocation
+src/lib/db           Drizzle PostgreSQL schema and lazy connection
+scripts              generation, seeding, reset, import, evaluation
+tests / e2e          unit, integration, and browser journeys
+docs                 architecture, safety, evaluation, dataset, deploy
+```
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Agent design](docs/AGENT_DESIGN.md)
+- [Explainability](docs/EXPLAINABILITY.md)
+- [Evaluation](docs/EVALUATION.md)
+- [Dataset](docs/DATASET.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [Guided demo](docs/DEMO_SCRIPT.md)
+- [Security](docs/SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+
+## Limitations
+
+The bundled operational integrations are deterministic sandbox adapters. Production deployments should replace them with authenticated order-management, payment, warehouse, courier, and messaging connectors while retaining the same typed permission boundary. The local memory fallback is intentionally ephemeral; production writes require PostgreSQL.
+
+## Suggested GitHub topics
+
+`agentic-ai` · `explainable-ai` · `nextjs` · `openai` · `ecommerce` · `operations` · `drizzle` · `vercel` · `hackathon`
+
+Licensed under the MIT License.

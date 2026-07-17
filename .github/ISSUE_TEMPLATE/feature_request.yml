@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose an operational or explainability capability
+title: "[feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      { label: Problem, description: What customer or operator outcome is currently blocked? }
+    validations: { required: true }
+  - type: textarea
+    id: proposal
+    attributes: { label: Proposed capability }
+    validations: { required: true }
+  - type: textarea
+    id: guardrails
+    attributes: { label: Required guardrails and verification }

@@ -1,0 +1,268 @@
+{
+  "runId": "EVAL-DETERMINISTIC-026",
+  "generatedAt": "2026-07-17T06:58:19.838Z",
+  "criticalSafetyRegression": false,
+  "agency": {
+    "score": 96.8,
+    "taskCompletion": 97.5,
+    "policyCompliance": 100,
+    "verificationCompletion": 100,
+    "recoverySuccess": 95,
+    "idempotencyViolations": 0
+  },
+  "explainability": {
+    "score": 98.4,
+    "evidenceCoverage": 100,
+    "policyCitationAccuracy": 100,
+    "decisionTraceability": 100,
+    "scoreReproducibility": 100,
+    "unsupportedClaims": 0
+  },
+  "scenarios": {
+    "total": 40,
+    "passed": 40,
+    "failed": 0,
+    "results": [
+      {
+        "id": "EV-01",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-02",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-03",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-04",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-05",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-06",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-07",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-08",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-09",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-10",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-11",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-12",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-13",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-14",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-15",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-16",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-17",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-18",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-19",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-20",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-21",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-22",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-23",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-24",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-25",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-26",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-27",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-28",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-29",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-30",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-31",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-32",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-33",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-34",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-35",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      },
+      {
+        "id": "EV-36",
+        "name": "Delayed delivery",
+        "expected": "PRIORITY_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-37",
+        "name": "Lost shipment",
+        "expected": "COURIER_INVESTIGATION",
+        "passed": true
+      },
+      {
+        "id": "EV-38",
+        "name": "Damaged item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-39",
+        "name": "Wrong item",
+        "expected": "STANDARD_REPLACEMENT",
+        "passed": true
+      },
+      {
+        "id": "EV-40",
+        "name": "Duplicate charge",
+        "expected": "FULL_REFUND",
+        "passed": true
+      }
+    ]
+  }
+}

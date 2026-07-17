@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "seed": 20260717,
+    "generatedAt": "2026-07-17T00:00:00.000Z",
+    "license": "CC0 synthetic data",
+    "authoritative": true
+  },
+  "counts": {
+    "customers": 500,
+    "products": 300,
+    "warehouses": 12,
+    "orders": 1500,
+    "orderItems": 2500,
+    "payments": 1500,
+    "shipments": 1500,
+    "shipmentEvents": 8000,
+    "inventory": 600,
+    "tickets": 250,
+    "ticketMessages": 600,
+    "refunds": 100,
+    "replacementOrders": 100,
+    "policies": 20,
+    "auditEvents": 1000,
+    "operationalBudgets": 14,
+    "evaluationCases": 40
+  }
+}
