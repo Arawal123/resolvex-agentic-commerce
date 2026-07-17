@@ -1,6 +1,6 @@
 {
-  "runId": "EVAL-DETERMINISTIC-026",
-  "generatedAt": "2026-07-17T09:04:12.155Z",
+  "runId": "EVAL-DUAL-LANE-027",
+  "generatedAt": "2026-07-17T10:25:04.991Z",
   "criticalSafetyRegression": false,
   "agency": {
     "score": 96.8,
@@ -17,6 +17,95 @@
     "decisionTraceability": 100,
     "scoreReproducibility": 100,
     "unsupportedClaims": 0
+  },
+  "causalCommerce": {
+    "rootCauseTop1Accuracy": 100,
+    "rootCauseTop2Recall": 100,
+    "brierScore": 0.0041,
+    "causalInterventionFidelity": 100,
+    "traceCompleteness": 100,
+    "customerRemedyAccuracy": 100,
+    "policyCompliance": 100,
+    "unsafeWriteRate": 0,
+    "results": [
+      {
+        "incident": "DELAYED_DELIVERY",
+        "expectedStage": "LINE_HAUL",
+        "topStages": [
+          "LINE_HAUL",
+          "PAYMENT"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "LOST_SHIPMENT",
+        "expectedStage": "CARRIER_HANDOFF",
+        "topStages": [
+          "CARRIER_HANDOFF",
+          "PAYMENT"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "DELIVERY_FAILURE",
+        "expectedStage": "LAST_MILE",
+        "topStages": [
+          "LAST_MILE",
+          "PAYMENT"
+        ],
+        "brier": 0.010308625000000002,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "DAMAGED_PRODUCT",
+        "expectedStage": "PACKING",
+        "topStages": [
+          "PACKING",
+          "PAYMENT"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "WRONG_PRODUCT",
+        "expectedStage": "WAREHOUSE_PICK",
+        "topStages": [
+          "WAREHOUSE_PICK",
+          "PAYMENT"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "OUT_OF_STOCK",
+        "expectedStage": "INVENTORY_PROMISE",
+        "topStages": [
+          "INVENTORY_PROMISE",
+          "PAYMENT"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      },
+      {
+        "incident": "DUPLICATE_CHARGE",
+        "expectedStage": "PAYMENT",
+        "topStages": [
+          "PAYMENT",
+          "INVENTORY_PROMISE"
+        ],
+        "brier": 0.003014000000000001,
+        "traceComplete": true,
+        "interventionChanged": true
+      }
+    ]
   },
   "scenarios": {
     "total": 40,

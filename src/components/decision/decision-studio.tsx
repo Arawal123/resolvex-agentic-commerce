@@ -12,7 +12,7 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
-import type { CounterfactualResult, DecisionRecord } from "@/lib/types";
+import type { CounterfactualResult, DecisionRecord, SupplyCounterfactualResult } from "@/lib/types";
 
 export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
   const [question, setQuestion] = useState("Why was replacement chosen instead of refund?");
@@ -20,6 +20,10 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
   const [asking, setAsking] = useState(false);
   const [inventory, setInventory] = useState(0);
   const [counterfactual, setCounterfactual] = useState<CounterfactualResult | null>(null);
+  const supplyMetric = decision.rootCauseAnalysis?.counterfactual;
+  const [supplyValue, setSupplyValue] = useState(supplyMetric?.replacementValue ?? 0);
+  const [supplyCounterfactual, setSupplyCounterfactual] =
+    useState<SupplyCounterfactualResult | null>(null);
   const selected = useMemo(
     () => decision.candidates.find((item) => item.action === decision.finalAction)!,
     [decision]
@@ -44,6 +48,21 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
     });
     const data = await response.json();
     setCounterfactual(data.result);
+  }
+  async function simulateSupply() {
+    if (!supplyMetric) return;
+    const response = await fetch("/api/decisions/counterfactual", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decisionId: decision.id,
+        scope: "supply",
+        field: supplyMetric.metricKey,
+        value: supplyValue,
+      }),
+    });
+    const data = await response.json();
+    setSupplyCounterfactual(data.result);
   }
   function exportRecord() {
     const blob = new Blob([JSON.stringify(decision, null, 2)], { type: "application/json" });
@@ -97,6 +116,114 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
           </div>
         </div>
       </section>
+
+      {decision.supplyTrace && decision.rootCauseAnalysis && decision.supplyDecision ? (
+        <section className="studio-section causal-studio-section">
+          <div className="section-intro">
+            <span>02 · SUPPLY CAUSAL TRACE</span>
+            <h3>{decision.rootCauseAnalysis.primaryCause?.label ?? "Inconclusive attribution"}</h3>
+            <p>
+              {decision.rootCauseAnalysis.attribution} at{" "}
+              {Math.round(decision.rootCauseAnalysis.confidence * 100)}% · deterministic sandbox
+              telemetry, not hidden model reasoning.
+            </p>
+          </div>
+          <div className="studio-pipeline">
+            {decision.supplyTrace.stages.map((stage) => (
+              <div key={stage.stage} className={stage.status}>
+                <i />
+                <span>{stage.label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="causal-studio-grid">
+            <div className="metric-ledger">
+              {decision.supplyTrace.metrics.map((metric) => (
+                <article key={metric.id} className={metric.status}>
+                  <div>
+                    <span>
+                      {metric.id} · {metric.stage.replaceAll("_", " ")}
+                    </span>
+                    <strong>{metric.label}</strong>
+                  </div>
+                  <b>
+                    {metric.observed}
+                    {metric.unit}
+                  </b>
+                  <small>
+                    threshold {metric.expected}
+                    {metric.unit}
+                  </small>
+                </article>
+              ))}
+            </div>
+            <div className="cause-ranking">
+              {decision.rootCauseAnalysis.hypotheses.slice(0, 5).map((hypothesis) => (
+                <article key={hypothesis.id}>
+                  <div>
+                    <strong>{hypothesis.label}</strong>
+                    <span>{Math.round(hypothesis.probability * 100)}%</span>
+                  </div>
+                  <i style={{ width: `${hypothesis.probability * 100}%` }} />
+                  <p>{hypothesis.explanation}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+          <details className="supply-remedy-disclosure">
+            <summary>Compare supply corrections</summary>
+            {decision.supplyDecision.candidates.map((candidate) => (
+              <p key={candidate.id}>
+                <span>{candidate.action.replaceAll("_", " ")}</span>
+                <b>{candidate.valid ? candidate.utilityScore.toFixed(3) : "not applicable"}</b>
+              </p>
+            ))}
+          </details>
+          {supplyMetric && (
+            <div className="supply-intervention">
+              <div>
+                <small>CAUSAL INTERVENTION</small>
+                <strong>{supplyMetric.metricKey}</strong>
+                <p>{supplyMetric.statement}</p>
+              </div>
+              <label>
+                Replacement value
+                <input
+                  type="number"
+                  min="0"
+                  value={supplyValue}
+                  onChange={(event) => setSupplyValue(Number(event.target.value))}
+                />
+              </label>
+              <button onClick={simulateSupply}>
+                <FlaskConical size={15} /> Test intervention
+              </button>
+              {supplyCounterfactual && (
+                <div className="supply-intervention-result">
+                  <strong>
+                    {supplyCounterfactual.changed
+                      ? "Decision boundary crossed"
+                      : "Attribution unchanged"}
+                  </strong>
+                  <p>{supplyCounterfactual.explanation}</p>
+                  <span>
+                    {supplyCounterfactual.originalAction.replaceAll("_", " ")} →{" "}
+                    {supplyCounterfactual.counterfactualAction.replaceAll("_", " ")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="studio-section legacy-causal-note">
+          <span>LEGACY RECORD</span>
+          <p>
+            This record predates supply tracing. Re-run its case to generate a dual-lane causal
+            record.
+          </p>
+        </section>
+      )}
 
       <section className="studio-section evidence-section">
         <div className="section-intro">
@@ -300,6 +427,7 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
         <div className="interrogate-chat">
           <div className="prompt-chips">
             {[
+              "What went wrong on the supply side?",
               "Which policy authorized this?",
               "What had the greatest influence?",
               "Which actions executed?",

@@ -6,6 +6,21 @@ export function answerDecisionQuestion(record: DecisionRecord, question: string)
   const second = [...record.candidates]
     .filter((candidate) => candidate.valid && candidate.action !== record.finalAction)
     .sort((a, b) => b.utilityScore - a.utilityScore)[0];
+  if (
+    record.rootCauseAnalysis &&
+    (normalized.includes("root cause") ||
+      normalized.includes("supply") ||
+      normalized.includes("went wrong") ||
+      normalized.includes("failure"))
+  ) {
+    const cause = record.rootCauseAnalysis.primaryCause;
+    const factors = record.rootCauseAnalysis.decisiveFactors.join("; ") || "no decisive metric";
+    const uncertainty =
+      record.rootCauseAnalysis.attribution === "inconclusive"
+        ? `Attribution is intentionally inconclusive. Missing: ${record.rootCauseAnalysis.missingEvidence.join(", ") || "decisive non-conflicting telemetry"}.`
+        : `It is ${record.rootCauseAnalysis.attribution} with a ${(record.rootCauseAnalysis.leadOverSecond * 100).toFixed(0)} point lead over the second cause.`;
+    return `${cause?.label ?? "No exact supply failure"} ranks first at ${((cause?.probability ?? 0) * 100).toFixed(0)}%. Decisive evidence: ${factors}. ${uncertainty} The selected correction is ${record.supplyDecision?.selectedAction.replaceAll("_", " ") ?? "not available"}.`;
+  }
   if (normalized.includes("policy") || normalized.includes("author"))
     return `Policy P-02 §4.2 authorized the selected action because the shipment inactivity and inventory preconditions were both satisfied [E-03, E-04, E-05]. The monetary guardrail in P-05 §2.1 was also checked [${chosen.policyChecks[1].id}].`;
   if (

@@ -5,6 +5,7 @@ import {
   getTicketByOrderId,
   listTickets,
 } from "@/lib/tickets/repository";
+import type { SupplyAction } from "@/lib/types";
 
 export type Permission = "support:read" | "operations:write" | "finance:write" | "verify:read";
 
@@ -41,7 +42,22 @@ const sandboxState = {
   resolvedTickets: new Set<string>(),
   courierInvestigations: new Set<string>(),
   followUps: new Map<string, string>(),
+  supplyCorrections: new Map<
+    string,
+    { action: SupplyAction; rootCauseId: string; state: string }
+  >(),
+  supplyEscalations: new Map<string, string>(),
 };
+
+const executableSupplyAction = z.enum([
+  "CARRIER_CORRECTIVE_INVESTIGATION",
+  "WAREHOUSE_QA_AUDIT",
+  "PACKAGING_QUALITY_AUDIT",
+  "PICK_ACCURACY_AUDIT",
+  "INVENTORY_RECONCILIATION",
+  "PAYMENT_IDEMPOTENCY_RECONCILIATION",
+  "RETURNS_PROCESS_REVIEW",
+]);
 
 export function defineTool<TSchema extends z.ZodType, TOutput extends Record<string, unknown>>(
   definition: ToolDefinition<TSchema, TOutput>
@@ -414,6 +430,40 @@ export const toolRegistry = {
       return { ticketId, state: "resolved" };
     },
   }),
+  executeSupplyCorrection: defineTool({
+    name: "executeSupplyCorrection",
+    description: "Open a typed sandbox corrective action against the attributed supply stage",
+    permission: "operations:write",
+    schema: z.object({
+      ticketId: z.string().min(1),
+      action: executableSupplyAction,
+      rootCauseId: z.string().min(1),
+    }),
+    execute: ({ ticketId, action, rootCauseId }) => {
+      const existing = sandboxState.supplyCorrections.get(ticketId);
+      const correction = existing ?? { action, rootCauseId, state: "open" };
+      sandboxState.supplyCorrections.set(ticketId, correction);
+      return {
+        correctionId: `SC-${ticketId.slice(4)}`,
+        ...correction,
+        sandbox: true,
+      };
+    },
+  }),
+  escalateSupplyIncident: defineTool({
+    name: "escalateSupplyIncident",
+    description: "Route inconclusive supply attribution for human operational review",
+    permission: "operations:write",
+    schema: z.object({ ticketId: z.string().min(1), reason: z.string().min(1).max(1500) }),
+    execute: ({ ticketId, reason }) => {
+      sandboxState.supplyEscalations.set(ticketId, reason);
+      return {
+        escalationId: `S-ESC-${ticketId.slice(4)}`,
+        queue: "supply-control",
+        state: "pending",
+      };
+    },
+  }),
 
   verifyRefund: defineTool({
     name: "verifyRefund",
@@ -495,6 +545,30 @@ export const toolRegistry = {
       at: sandboxState.followUps.get(ticketId),
     }),
   }),
+  verifySupplyCorrection: defineTool({
+    name: "verifySupplyCorrection",
+    description: "Read back the independently stored supply corrective action",
+    permission: "verify:read",
+    schema: z.object({ ticketId: z.string().min(1), action: executableSupplyAction }),
+    execute: ({ ticketId, action }) => {
+      const correction = sandboxState.supplyCorrections.get(ticketId);
+      return {
+        verified: correction?.action === action && correction.state === "open",
+        correctionId: correction ? `SC-${ticketId.slice(4)}` : null,
+        state: correction?.state ?? "missing",
+      };
+    },
+  }),
+  verifySupplyEscalation: defineTool({
+    name: "verifySupplyEscalation",
+    description: "Verify an inconclusive supply case reached the human review queue",
+    permission: "verify:read",
+    schema: ticketInput,
+    execute: ({ ticketId }) => ({
+      verified: sandboxState.supplyEscalations.has(ticketId),
+      state: sandboxState.supplyEscalations.has(ticketId) ? "pending" : "missing",
+    }),
+  }),
   verifyBatchExecution: defineTool({
     name: "verifyBatchExecution",
     description: "Verify each allocated batch action",
@@ -523,6 +597,8 @@ export function resetSandboxState() {
   sandboxState.resolvedTickets.clear();
   sandboxState.courierInvestigations.clear();
   sandboxState.followUps.clear();
+  sandboxState.supplyCorrections.clear();
+  sandboxState.supplyEscalations.clear();
   idempotencyLedger.clear();
   auditEvents.length = 0;
 }

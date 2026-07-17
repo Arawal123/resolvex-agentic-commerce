@@ -4,7 +4,7 @@ import { incidentPlaybooks } from "@/lib/agent/playbooks";
 import { createManualDraft } from "@/lib/intake/schema";
 import { createManualTicket, resetManualTickets } from "@/lib/tickets/repository";
 import { resetSandboxState } from "@/lib/tools/registry";
-import type { IncidentType, ManualCaseDraft } from "@/lib/types";
+import type { AgentEvent, IncidentType, ManualCaseDraft } from "@/lib/types";
 
 function draftFor(incident: IncidentType): ManualCaseDraft {
   const requestedOutcome =
@@ -60,13 +60,33 @@ describe("incident playbooks", () => {
 
   it("runs delayed delivery through a replacement and verifies every write", async () => {
     const ticket = await createManualTicket(draftFor("DELAYED_DELIVERY"));
-    const events: string[] = [];
+    const events: AgentEvent[] = [];
     const record = await runAgent(ticket.id, (event) => {
-      events.push(event.type);
+      events.push(event);
     });
     expect(record.finalAction).toMatch(/REPLACEMENT/);
     expect(record.verification.every((check) => check.passed)).toBe(true);
-    expect(events).toEqual(expect.arrayContaining(["phase", "tool", "verification", "complete"]));
+    expect(events.map((event) => event.type)).toEqual(
+      expect.arrayContaining(["phase", "tool", "verification", "complete"])
+    );
+    const diagnosisIndex = events.findIndex(
+      (event) => event.type === "phase" && event.phase === "DIAGNOSE" && event.lane === "supply"
+    );
+    const customerActionIndex = events.findIndex(
+      (event) => event.type === "phase" && event.phase === "ACT" && event.lane === "customer"
+    );
+    const supplyActionIndex = events.findIndex(
+      (event) => event.type === "phase" && event.phase === "ACT" && event.lane === "supply"
+    );
+    const verificationIndex = events.findIndex(
+      (event) => event.type === "phase" && event.phase === "VERIFY" && event.lane === "shared"
+    );
+    expect(diagnosisIndex).toBeGreaterThan(0);
+    expect(customerActionIndex).toBeGreaterThan(diagnosisIndex);
+    expect(supplyActionIndex).toBeGreaterThan(customerActionIndex);
+    expect(verificationIndex).toBeGreaterThan(supplyActionIndex);
+    expect(record.supplyDecision?.executionStatus).toBe("verified");
+    expect(record.customerOutcome?.executionStatus).toBe("verified");
   });
 
   it("holds a verified ₹12,450 duplicate charge at approval without refund execution", async () => {
@@ -85,6 +105,8 @@ describe("incident playbooks", () => {
     expect(record.approvalStatus).toBe("pending");
     expect(
       record.toolCalls.filter((call) => call.phase === "ACT").map((call) => call.name)
-    ).toEqual(["escalateToHuman"]);
+    ).toEqual(["escalateToHuman", "escalateSupplyIncident"]);
+    expect(record.rootCauseAnalysis?.attribution).toBe("inconclusive");
+    expect(record.supplyDecision?.selectedAction).toBe("HUMAN_SUPPLY_ESCALATION");
   });
 });

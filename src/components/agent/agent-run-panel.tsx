@@ -16,32 +16,56 @@ import type { AgentEvent, DecisionRecord, Ticket } from "@/lib/types";
 
 const phaseNumber: Record<string, string> = {
   OBSERVE: "01",
-  PLAN: "02",
-  ACT: "03",
-  VERIFY: "04",
-  EXPLAIN: "05",
-  COMPLETE: "06",
+  DIAGNOSE: "02",
+  PLAN: "03",
+  ACT: "04",
+  VERIFY: "05",
+  EXPLAIN: "06",
+  COMPLETE: "07",
 };
 
 function eventCopy(event: AgentEvent) {
   if (event.type === "phase")
-    return { phase: event.phase, title: event.title, detail: event.detail };
+    return {
+      phase: event.phase,
+      title: event.title,
+      detail: event.detail,
+      lane: event.lane ?? "shared",
+    };
   if (event.type === "tool")
     return {
       phase: event.trace.phase,
       title: event.trace.name.replace(/([a-z])([A-Z])/g, "$1 $2"),
-      detail: `${event.trace.status} · ${event.trace.latencyMs}ms · typed tool receipt ${event.trace.id}`,
+      detail: `${event.trace.status} · ${event.trace.latencyMs}ms · typed receipt ${event.trace.id}`,
+      lane: event.lane ?? event.trace.lane ?? "shared",
     };
   if (event.type === "verification")
     return {
       phase: "VERIFY",
       title: event.result.check,
       detail: event.result.passed ? "Independent read-back passed." : event.result.detail,
+      lane: event.lane ?? event.result.lane ?? "shared",
     };
   if (event.type === "approval")
-    return { phase: "ACT", title: "Human approval boundary", detail: event.reason };
-  if (event.type === "error") return { phase: "RECOVER", title: event.code, detail: event.message };
-  return { phase: "COMPLETE", title: "Decision record sealed", detail: event.decision.summary };
+    return {
+      phase: "ACT",
+      title: "Human approval boundary",
+      detail: event.reason,
+      lane: event.lane ?? "customer",
+    };
+  if (event.type === "error")
+    return {
+      phase: "RECOVER",
+      title: event.code,
+      detail: event.message,
+      lane: event.lane ?? "shared",
+    };
+  return {
+    phase: "COMPLETE",
+    title: "Decision record sealed",
+    detail: event.decision.summary,
+    lane: event.lane ?? "shared",
+  };
 }
 
 function pause(milliseconds: number) {
@@ -114,12 +138,13 @@ export function AgentRunPanel({
     return () => window.clearTimeout(timer);
   }, [autoStart, run, ticket.id]);
 
+  const visibleEvents = events.filter((event) => event.type !== "complete");
   return (
     <section className="agent-console" aria-live="polite">
       <div className="console-head">
         <div>
-          <span className="console-kicker">AUTONOMOUS CONTROLLER</span>
-          <h2>Observe → Plan → Act → Verify</h2>
+          <span className="console-kicker">DUAL-LANE CONTROLLER</span>
+          <h2>Observe → Diagnose → Resolve</h2>
         </div>
         <button className="primary-action" onClick={run} disabled={running}>
           {running ? (
@@ -137,7 +162,7 @@ export function AgentRunPanel({
           </div>
           <p>Controller armed</p>
           <span>
-            Gemini may extract language. Deterministic policy code decides what can execute.
+            One evidence pass. Supply cause and customer remedy remain independently bounded.
           </span>
         </div>
       )}
@@ -149,36 +174,33 @@ export function AgentRunPanel({
             <i />
           </div>
           <div className="event-cascade">
-            {events
-              .filter((event) => event.type !== "complete")
-              .map((event, index) => {
-                const copy = eventCopy(event);
-                const latest =
-                  index === events.filter((item) => item.type !== "complete").length - 1;
-                return (
-                  <article
-                    key={`${event.type}-${index}`}
-                    className={latest && running ? "latest" : ""}
-                  >
-                    <div className="event-coordinate">
-                      <span>{phaseNumber[copy.phase] ?? "·"}</span>
-                      <i />
-                    </div>
-                    <div>
-                      <small>{copy.phase}</small>
-                      <strong>{copy.title}</strong>
-                      <p>{copy.detail}</p>
-                    </div>
-                    <div className="event-state">
-                      {latest && running ? <Sparkles /> : <Check />}
-                    </div>
-                  </article>
-                );
-              })}
+            {visibleEvents.map((event, index) => {
+              const copy = eventCopy(event);
+              const latest = index === visibleEvents.length - 1;
+              return (
+                <article
+                  key={`${event.type}-${index}`}
+                  className={latest && running ? "latest" : ""}
+                >
+                  <div className="event-coordinate">
+                    <span>{phaseNumber[copy.phase] ?? "·"}</span>
+                    <i />
+                  </div>
+                  <div>
+                    <small>
+                      {copy.lane} / {copy.phase}
+                    </small>
+                    <strong>{copy.title}</strong>
+                    <p>{copy.detail}</p>
+                  </div>
+                  <div className="event-state">{latest && running ? <Sparkles /> : <Check />}</div>
+                </article>
+              );
+            })}
             {running && (
               <div className="next-event">
                 <LoaderCircle className="spin" />
-                <span>Awaiting the next signed controller event</span>
+                <span>Awaiting the next signed event</span>
               </div>
             )}
           </div>
@@ -187,20 +209,96 @@ export function AgentRunPanel({
       {error && <div className="error-state">{error}</div>}
       {decision && !running && (
         <div className="run-result cinematic-result">
-          <div className="decision-flare">
-            <div>
-              <small>
-                SELECTED ACTION ·{" "}
-                {decision.candidates.find((item) => item.action === decision.finalAction)?.id}
-              </small>
-              <strong>{decision.finalAction.replaceAll("_", " ")}</strong>
-              <p>{decision.summary}</p>
+          {decision.rootCauseAnalysis &&
+          decision.supplyTrace &&
+          decision.supplyDecision &&
+          decision.customerOutcome ? (
+            <>
+              <div className="causal-verdict">
+                <div>
+                  <small>SHARED CAUSAL VERDICT</small>
+                  <strong>
+                    {decision.rootCauseAnalysis.primaryCause?.label ?? "Inconclusive attribution"}
+                  </strong>
+                  <p>
+                    {decision.rootCauseAnalysis.attribution} ·{" "}
+                    {Math.round(decision.rootCauseAnalysis.confidence * 100)}% probability
+                  </p>
+                </div>
+                <div className="causal-pipeline" aria-label="Commerce supply pipeline">
+                  {decision.supplyTrace.stages.map((stage) => (
+                    <span key={stage.stage} className={stage.status} title={stage.label}>
+                      <i />
+                      <em>{stage.label}</em>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="dual-outcomes">
+                <article className="outcome-lane supply-lane">
+                  <small>SUPPLY SIDE</small>
+                  <h3>{decision.supplyDecision.selectedAction.replaceAll("_", " ")}</h3>
+                  <p>{decision.supplyDecision.summary}</p>
+                  <div className="lane-status">
+                    <span>{decision.rootCauseAnalysis.attribution}</span>
+                    <b>{decision.supplyDecision.executionStatus.replaceAll("_", " ")}</b>
+                  </div>
+                  <details>
+                    <summary>Inspect causal evidence</summary>
+                    <div className="causal-details">
+                      {decision.rootCauseAnalysis.decisiveFactors.map((factor) => (
+                        <p key={factor}>{factor}</p>
+                      ))}
+                      {decision.rootCauseAnalysis.counterfactual && (
+                        <p>{decision.rootCauseAnalysis.counterfactual.statement}</p>
+                      )}
+                      <ol>
+                        {decision.rootCauseAnalysis.hypotheses.slice(0, 4).map((hypothesis) => (
+                          <li key={hypothesis.id}>
+                            <span>{hypothesis.label}</span>
+                            <b>{Math.round(hypothesis.probability * 100)}%</b>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  </details>
+                </article>
+                <article className="outcome-lane customer-lane">
+                  <small>CUSTOMER SIDE</small>
+                  <h3>{decision.customerOutcome.bestSuggestion}</h3>
+                  <p>{decision.customerOutcome.expectedResult}</p>
+                  <div className="lane-status">
+                    <span>{decision.customerOutcome.action.replaceAll("_", " ")}</span>
+                    <b>{decision.customerOutcome.executionStatus.replaceAll("_", " ")}</b>
+                  </div>
+                  <details>
+                    <summary>Why this remedy</summary>
+                    <div className="causal-details">
+                      <p>{decision.customerOutcome.rationale}</p>
+                      {decision.customerOutcome.rankedAlternatives.map((alternative) => (
+                        <p key={alternative.action}>
+                          {alternative.action.replaceAll("_", " ")} ·{" "}
+                          {alternative.utilityScore.toFixed(3)}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
+                </article>
+              </div>
+            </>
+          ) : (
+            <div className="decision-flare">
+              <div>
+                <small>LEGACY CUSTOMER DECISION</small>
+                <strong>{decision.finalAction.replaceAll("_", " ")}</strong>
+                <p>{decision.summary}</p>
+              </div>
+              <div className="confidence-ring">
+                <b>{Math.round(decision.confidence * 100)}</b>
+                <span>confidence</span>
+              </div>
             </div>
-            <div className="confidence-ring">
-              <b>{Math.round(decision.confidence * 100)}</b>
-              <span>confidence</span>
-            </div>
-          </div>
+          )}
           <div className="run-proof">
             <span>
               <Wrench size={15} />

@@ -37,6 +37,28 @@ describe("typed tool controller", () => {
     expect(second.auditId).toBe(first.auditId);
   });
 
+  it("executes and independently verifies an idempotent supply correction", async () => {
+    const input = {
+      ticketId: "TKT-1042",
+      action: "CARRIER_CORRECTIVE_INVESTIGATION" as const,
+      rootCauseId: "RC-06",
+    };
+    const first = await toolRegistry.executeSupplyCorrection.call(input, {
+      ...context,
+      idempotencyKey: "same-supply-correction",
+    });
+    const second = await toolRegistry.executeSupplyCorrection.call(input, {
+      ...context,
+      idempotencyKey: "same-supply-correction",
+    });
+    const verified = await toolRegistry.verifySupplyCorrection.call(
+      { ticketId: input.ticketId, action: input.action },
+      context
+    );
+    expect(second.auditId).toBe(first.auditId);
+    expect(verified.data.verified).toBe(true);
+  });
+
   it("runs a closed loop and independently verifies state", async () => {
     const record = await runAgent("TKT-1042");
     expect(record.finalAction).toBe("PRIORITY_REPLACEMENT");

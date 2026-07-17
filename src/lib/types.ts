@@ -19,7 +19,123 @@ export type ActionType =
   | "COURIER_INVESTIGATION"
   | "HUMAN_ESCALATION";
 
-export type AgentPhase = "OBSERVE" | "PLAN" | "ACT" | "VERIFY" | "RECOVER" | "COMPLETE" | "EXPLAIN";
+export type AgentPhase =
+  "OBSERVE" | "DIAGNOSE" | "PLAN" | "ACT" | "VERIFY" | "RECOVER" | "COMPLETE" | "EXPLAIN";
+
+export type AgentLane = "shared" | "supply" | "customer";
+
+export type SupplyStage =
+  | "PAYMENT"
+  | "INVENTORY_PROMISE"
+  | "WAREHOUSE_PICK"
+  | "PACKING"
+  | "CARRIER_HANDOFF"
+  | "LINE_HAUL"
+  | "LAST_MILE"
+  | "CUSTOMER_OR_RETURN";
+
+export type SupplyAction =
+  | "CARRIER_CORRECTIVE_INVESTIGATION"
+  | "WAREHOUSE_QA_AUDIT"
+  | "PACKAGING_QUALITY_AUDIT"
+  | "PICK_ACCURACY_AUDIT"
+  | "INVENTORY_RECONCILIATION"
+  | "PAYMENT_IDEMPOTENCY_RECONCILIATION"
+  | "RETURNS_PROCESS_REVIEW"
+  | "NO_SUPPLY_FAULT"
+  | "HUMAN_SUPPLY_ESCALATION";
+
+export interface SupplyMetric {
+  id: string;
+  key: string;
+  label: string;
+  stage: SupplyStage;
+  observed: number;
+  expected: number;
+  unit: string;
+  deviation: number;
+  status: "healthy" | "warning" | "failed" | "unknown";
+  source: string;
+  evidenceId: string;
+}
+
+export interface SupplyTraceStage {
+  stage: SupplyStage;
+  label: string;
+  status: SupplyMetric["status"];
+  metricIds: string[];
+}
+
+export interface SupplyTrace {
+  source: "deterministic_sandbox";
+  stages: SupplyTraceStage[];
+  metrics: SupplyMetric[];
+  causalPath: SupplyStage[];
+  generatedAt: string;
+}
+
+export interface RootCauseHypothesis {
+  id: string;
+  stage: SupplyStage;
+  label: string;
+  probability: number;
+  rawScore: number;
+  decisiveMetricIds: string[];
+  contradictoryMetricIds: string[];
+  explanation: string;
+}
+
+export interface CausalCounterfactual {
+  metricKey: string;
+  originalValue: number;
+  replacementValue: number;
+  statement: string;
+}
+
+export interface RootCauseAnalysis {
+  attribution: "confirmed" | "probable" | "inconclusive";
+  primaryCause: RootCauseHypothesis | null;
+  hypotheses: RootCauseHypothesis[];
+  confidence: number;
+  leadOverSecond: number;
+  decisiveFactors: string[];
+  contradictoryEvidence: string[];
+  missingEvidence: string[];
+  counterfactual: CausalCounterfactual | null;
+}
+
+export interface SupplyCandidate {
+  id: string;
+  action: SupplyAction;
+  valid: boolean;
+  utilityScore: number;
+  recurrenceReduction: number;
+  operationalImpact: number;
+  timeToEffect: number;
+  costEfficiency: number;
+  confidence: number;
+  policyValidity: number;
+  rationale: string;
+  rejectionReasons: string[];
+}
+
+export interface SupplyDecision {
+  selectedAction: SupplyAction;
+  summary: string;
+  candidates: SupplyCandidate[];
+  executionStatus: "verified" | "pending" | "escalated" | "no_action" | "failed";
+  verificationIds: string[];
+}
+
+export interface CustomerOutcome {
+  bestSuggestion: string;
+  expectedResult: string;
+  rationale: string;
+  action: ActionType;
+  approvalStatus: DecisionRecord["approvalStatus"];
+  executionStatus: "verified" | "pending_approval" | "monitoring" | "failed";
+  rankedAlternatives: Array<{ action: ActionType; utilityScore: number }>;
+}
 
 export interface EvidenceItem {
   id: string;
@@ -103,12 +219,12 @@ export interface IntakeParseResult {
 }
 
 export type AgentEvent =
-  | { type: "phase"; phase: AgentPhase; title: string; detail: string }
-  | { type: "tool"; trace: ToolTrace }
-  | { type: "approval"; ticketId: string; reason: string }
-  | { type: "verification"; result: VerificationResult }
-  | { type: "complete"; decision: DecisionRecord }
-  | { type: "error"; code: string; message: string };
+  | { type: "phase"; phase: AgentPhase; title: string; detail: string; lane?: AgentLane }
+  | { type: "tool"; trace: ToolTrace; lane?: AgentLane }
+  | { type: "approval"; ticketId: string; reason: string; lane?: AgentLane }
+  | { type: "verification"; result: VerificationResult; lane?: AgentLane }
+  | { type: "complete"; decision: DecisionRecord; lane?: AgentLane }
+  | { type: "error"; code: string; message: string; lane?: AgentLane };
 
 export interface PolicyCheck {
   id: string;
@@ -149,6 +265,7 @@ export interface ToolTrace {
   output: Record<string, unknown>;
   latencyMs: number;
   at: string;
+  lane?: AgentLane;
 }
 
 export interface VerificationResult {
@@ -157,6 +274,7 @@ export interface VerificationResult {
   passed: boolean;
   detail: string;
   toolCallId: string;
+  lane?: AgentLane;
 }
 
 export interface TimelineEvent {
@@ -166,6 +284,7 @@ export interface TimelineEvent {
   detail: string;
   at: string;
   status: "complete" | "active" | "warning";
+  lane?: AgentLane;
 }
 
 export interface DecisionRecord {
@@ -183,6 +302,10 @@ export interface DecisionRecord {
   toolCalls: ToolTrace[];
   verification: VerificationResult[];
   timeline: TimelineEvent[];
+  supplyTrace?: SupplyTrace;
+  rootCauseAnalysis?: RootCauseAnalysis;
+  supplyDecision?: SupplyDecision;
+  customerOutcome?: CustomerOutcome;
   versions: {
     controller: string;
     policy: string;
@@ -203,4 +326,19 @@ export interface CounterfactualResult {
   changedContributions: Array<{ factor: string; delta: number }>;
   policiesTriggered: string[];
   smallestDecisionChangingCondition: string;
+}
+
+export interface SupplyCounterfactualResult {
+  scope: "supply";
+  field: string;
+  originalValue: number;
+  modifiedValue: number;
+  originalCause: string | null;
+  counterfactualCause: string | null;
+  originalAction: SupplyAction;
+  counterfactualAction: SupplyAction;
+  originalProbabilities: Array<{ id: string; probability: number }>;
+  counterfactualProbabilities: Array<{ id: string; probability: number }>;
+  changed: boolean;
+  explanation: string;
 }

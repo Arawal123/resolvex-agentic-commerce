@@ -43,7 +43,7 @@ export default async function TicketDetailPage({
           </div>
         </div>
       </Reveal>
-      <div className="case-layout">
+      <div className="case-layout dual-case-layout">
         <Reveal delay={0.08} className="case-context">
           <section>
             <div className="context-title">

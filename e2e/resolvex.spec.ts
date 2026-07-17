@@ -5,10 +5,47 @@ test("guided judge journey reaches a verified decision", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Anniversary gift/ })).toBeVisible();
   await page.getByRole("button", { name: "Run agent" }).click();
   await expect(page.getByText("PRIORITY REPLACEMENT").first()).toBeVisible({ timeout: 20000 });
+  await expect(
+    page.getByRole("strong").filter({ hasText: "Line-haul hub dwell breach" }).first()
+  ).toBeVisible();
+  await expect(page.getByText("SUPPLY SIDE")).toBeVisible();
+  await expect(page.getByText("CUSTOMER SIDE")).toBeVisible();
   await page.getByRole("link", { name: /Open Decision Studio/ }).click();
   await expect(page.getByRole("heading", { name: "A decision you can challenge." })).toBeVisible();
+  await expect(page.getByText("SUPPLY CAUSAL TRACE")).toBeVisible();
+  await page.getByRole("button", { name: "Test intervention" }).click();
+  await expect(page.getByText("Decision boundary crossed")).toBeVisible();
   await page.getByRole("button", { name: "Recompute decision" }).click();
   await expect(page.getByText("COUNTERFACTUAL", { exact: true })).toBeVisible();
+});
+
+test("duplicate charge separates payment failure from approval-bound customer remedy", async ({
+  page,
+}) => {
+  await page.goto("/tickets/TKT-1038");
+  await page.getByRole("button", { name: "Run agent" }).click();
+  await expect(
+    page.getByRole("strong").filter({ hasText: "Payment idempotency failure" }).first()
+  ).toBeVisible({ timeout: 20000 });
+  await expect(
+    page.getByRole("heading", { name: "PAYMENT IDEMPOTENCY RECONCILIATION" })
+  ).toBeVisible();
+  await expect(page.getByText("pending approval")).toBeVisible();
+  await expect(
+    page.getByText(
+      "No consequential write occurs until an attributed reviewer approves the remedy."
+    )
+  ).toBeVisible();
+});
+
+test("wrong item exposes pick mismatch and warehouse correction", async ({ page }) => {
+  await page.goto("/tickets/TKT-1021");
+  await page.getByRole("button", { name: "Run agent" }).click();
+  await expect(
+    page.getByRole("strong").filter({ hasText: "Warehouse pick mismatch" }).first()
+  ).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("heading", { name: "PICK ACCURACY AUDIT" })).toBeVisible();
+  await expect(page.getByText(/Send a standard replacement/)).toBeVisible();
 });
 
 test("optimizer produces a constraint-respecting batch plan", async ({ page }) => {
@@ -28,7 +65,9 @@ test("manual intake blocks missing evidence, then streams a bounded run", async 
     );
   await page.getByLabel("Customer name").fill("Meera Rao");
   await page.getByRole("button", { name: "Extract case facts" }).click();
-  await expect(page.getByText("STRUCTURED MANUAL FALLBACK")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/GEMINI EXTRACTION|STRUCTURED MANUAL FALLBACK/)).toBeVisible({
+    timeout: 15000,
+  });
 
   await page.getByLabel("Incident").selectOption("DELAYED_DELIVERY");
   await page.getByLabel("Order value (₹)").fill("3200");
