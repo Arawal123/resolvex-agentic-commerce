@@ -2,71 +2,245 @@
 
 **Explainable Autonomous E-Commerce Operations Agent**
 
-ResolveX is a genuinely agentic operations platform. It investigates commerce incidents through typed tools, evaluates policy-constrained alternatives with a deterministic scoring engine, executes real sandbox operations, verifies the resulting state independently, and seals every outcome in a contestable Decision Record.
+> [!IMPORTANT]
+> **Judges should run ResolveX locally for the complete experience.** The hosted build is useful as a visual preview, but the full agent run, streamed tool activity, manual case intake, counterfactual testing, local persistence, and environment-dependent integrations should be evaluated from the downloaded ZIP on a local machine.
 
-> Demo mode is deterministic, clearly labelled, and requires no model key. All bundled people, orders, messages, payments, and events are synthetic.
+## Run locally from the ZIP — start here
 
-## Why it is agentic
+### 1. Install the prerequisites
 
-The controller completes a closed loop: **Observe → Plan → Act → Verify → Recover or Complete → Explain**. The model can classify, plan, and propose candidates; it cannot mutate arbitrary data. Consequential state changes pass through a Zod-validated permissioned tool registry with idempotency keys, bounded retries, audit events, and separate verification tools.
+Required:
 
-## Why its explanations are trustworthy
+- [Node.js](https://nodejs.org/) **20.19 or newer**; Node.js 22 LTS is recommended
+- npm 10 or newer, included with Node.js
+- A modern browser such as Chrome, Edge, or Firefox
 
-ResolveX never exposes hidden chain-of-thought. It produces a structured Decision Record from observable material: evidence IDs, source records, exact policy clauses, candidate scores, factor contributions, rejection reasons, tool inputs and receipts, verification results, counterfactual reruns, and version identifiers. The “Ask About This Decision” panel retrieves only from that stored record.
+Optional:
 
-## Product surface
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) for persistent local PostgreSQL data
+- A Gemini API key for AI-assisted extraction from free-form customer messages
 
-- Cinematic landing experience and executive command plane
-- Ranked support queue and end-to-end live agent run
-- Manual-input workflow with Gemini structured extraction, editable evidence review, and streamed execution
-- Decision Studio with evidence, policies, candidates, factor attribution, counterfactuals, tool receipts, verification, interrogation, and JSON export
-- Constrained operations optimizer with global budget and inventory allocation
-- Human approval queue with approve, reject, modify, operator notes, and resume attribution
-- Searchable dual-form policy library
-- Agency and explainability benchmark center with 40 deterministic scenarios
-- Versioned autonomy thresholds and visible scoring weights
-- PostgreSQL/Drizzle production schema plus no-key sandbox fallback
+Neither Docker nor a Gemini key is required for the deterministic judge demo.
+
+### 2. Download and extract the project
+
+1. Open the GitHub repository.
+2. Select **Code → Download ZIP**.
+3. Extract the ZIP completely.
+4. Open a terminal inside the extracted folder that contains `package.json`.
+
+The extracted directory will usually be named `resolvex-agentic-commerce-main`.
+
+### 3. Install the exact project dependencies
+
+```bash
+npm ci
+```
+
+### 4. Start ResolveX
+
+```bash
+npm run dev
+```
+
+Wait until the terminal reports that the application is ready, then open:
+
+**[http://localhost:3000](http://localhost:3000)**
+
+No login is required. The default local run uses synthetic sandbox data and does not need an `.env.local` file.
+
+### 5. Run the recommended judge journey
+
+1. On the landing page, select **Launch the live case**.
+2. Open the highlighted delayed-delivery case and select **Run agent**.
+3. Watch the streamed **Observe → Diagnose → Plan → Act → Verify → Explain** lifecycle.
+4. Compare the two coordinated outcomes:
+   - the supply-side root cause and corrective action;
+   - the customer-side remedy and expected result.
+5. Open **Decision Studio**.
+6. Inspect root-cause probabilities, remedy-selection probabilities, evidence, tool receipts, and independent verification results.
+7. Expand the audit section and test both supply and customer counterfactuals.
+8. Ask the sealed record a question such as **“What went wrong on the supply side?”**
+9. Visit **Operations**, **Human Oversight**, **Policies**, and **Evaluation Center** to inspect the remaining agent controls.
+
+### 6. Stop the project
+
+Return to the terminal and press `Ctrl+C`.
+
+## Enable the complete local integrations
+
+The zero-configuration sandbox above demonstrates the complete agent loop. The following optional local services add durable data and model-assisted intake.
+
+### Persistent PostgreSQL data
+
+Create the local environment file.
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+macOS or Linux:
+
+```bash
+cp .env.example .env.local
+```
+
+Start PostgreSQL and prepare the schema:
+
+```bash
+docker compose up -d
+npm run db:migrate
+npm run data:generate
+npm run db:seed
+npm run dev
+```
+
+The example database connection is already configured for the included Docker Compose service. PostgreSQL preserves manual cases and Decision Records between local server restarts. Without it, ResolveX transparently uses ephemeral in-memory sandbox state.
+
+### Gemini-assisted manual intake
+
+Gemini is used only to convert an unstructured customer message into a typed draft for human review. It does **not** receive permission to execute tools, issue refunds, change inventory, or bypass policy.
+
+1. If PostgreSQL is enabled, add the key to the `.env.local` file created above. If PostgreSQL is not enabled, create `.env.local` with only the variables shown below so the application continues to use its sandbox data.
+2. Add the key only to your private local file:
+
+   ```dotenv
+   GEMINI_API_KEY=your_private_key_here
+   GEMINI_MODEL=gemini-3.5-flash
+   ```
+
+3. Restart `npm run dev` after changing environment variables.
+4. Open **Manual Intake**, paste a customer message, review every extracted field, and submit the case.
+
+> [!CAUTION]
+> Never place a real Gemini key in `.env.example`, source code, screenshots, commits, or the ZIP. `.env.local` is ignored by Git. If no key is supplied, the same workflow remains available through the structured manual-entry fallback.
+
+### Confirm the active local mode
+
+Open [http://localhost:3000/api/health](http://localhost:3000/api/health). The response identifies whether ResolveX is using PostgreSQL or the sandbox fallback and whether Gemini or manual intake is active.
+
+## What ResolveX does
+
+ResolveX handles e-commerce incidents such as delayed deliveries, damaged or incorrect products, lost shipments, return requests, stock failures, duplicate charges, and failed deliveries. It does more than generate a recommendation: it investigates the case, chooses bounded actions, operates through permissioned tools, verifies the resulting state, and produces an auditable explanation.
+
+### The agentic AI operating loop
+
+| Phase                   | What the agent does                                                                                                                                                                                                                      | What the operator can inspect                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Observe**             | Selects the incident playbook and retrieves only the customer, order, payment, inventory, tracking, and case-history facts needed for that incident.                                                                                     | Source-bound evidence IDs and read-tool receipts.                                                |
+| **Diagnose**            | Reconstructs the supply path and ranks supported causes such as warehouse handling, inventory allocation, line-haul delay, last-mile failure, or no attributable supply fault.                                                           | Supply metrics, thresholds, causal path, hypotheses, confidence, and uncertainty.                |
+| **Plan**                | Generates customer remedies and supply corrections, rejects invalid actions, checks policy and approval boundaries, and ranks the valid alternatives.                                                                                    | Every candidate, rejection reason, utility score, factor contribution, and selected action.      |
+| **Act**                 | Executes the selected bounded operation through typed tools—for example reserving a replacement, issuing an eligible refund, creating a coupon, opening a courier investigation, notifying the customer, or opening a supply correction. | Validated inputs, permissions, idempotency keys, outputs, timestamps, and tool receipts.         |
+| **Verify**              | Uses separate read-back tools to confirm that every consequential write actually changed operational state. A successful API call is not treated as proof.                                                                               | Independent verification checks and pass/fail evidence.                                          |
+| **Recover or escalate** | Retries bounded transient failures, selects a valid fallback, or pauses at a human approval boundary when risk, cost, confidence, or missing evidence makes autonomous execution unsafe.                                                 | Approval reason, reviewer decision, operator note, retry/fallback event, and resume attribution. |
+| **Explain**             | Seals the facts, policies, alternatives, actions, and verification results into a versioned Decision Record.                                                                                                                             | Decision Studio, grounded questions, JSON export, and deterministic counterfactual reruns.       |
+
+### Two coordinated decisions from one investigation
+
+ResolveX deliberately separates two questions that ordinary support automation often mixes together:
+
+1. **What failed operationally?** The supply lane identifies the most supportable root cause and selects a corrective operational action.
+2. **What is the safest useful customer remedy?** The customer lane selects the policy-valid action that best satisfies the customer goal while respecting inventory, cost, risk, and approval limits.
+
+The two lanes share evidence but have separate candidates, execution states, and verification receipts. This allows the system to help the customer immediately without hiding the operational failure that caused the incident.
+
+## Major product functions
+
+### Live agent case handling
+
+Runs a selected ticket through the complete controller and streams every phase, tool call, approval event, and verification result to the interface in real time.
+
+### Manual case intake
+
+Accepts a new customer message, optionally uses Gemini to extract typed facts, highlights missing or uncertain fields, requires operator review, and creates a case only after the structured data passes validation.
+
+### Deterministic policy and remedy selection
+
+Evaluates replacements, refunds, compensation, investigations, monitoring, and human escalation against versioned commerce policy. The final score is reproducible from stored factors such as customer-goal fit, policy compliance, SLA recovery, speed, inventory, risk, cost, complexity, and approval requirements.
+
+### Supply root-cause diagnosis
+
+Builds a stage-by-stage operational trace, compares observed metrics with expected thresholds, ranks causal hypotheses, and chooses a bounded correction or human supply escalation when attribution is inconclusive.
+
+### Typed operational tools
+
+All reads and writes pass through a Zod-validated registry with role permissions, structured results, audit IDs, explicit failure codes, bounded retries, and idempotency protection. The AI cannot emit arbitrary SQL or directly mutate application state.
+
+### Independent verification
+
+After actions execute, separate verification tools read the resulting state—for example replacement reservation, refund submission, coupon activation, customer notification, follow-up scheduling, supply correction, and ticket resolution.
+
+### Decision Studio
+
+Provides a contestable record of the outcome: evidence sources, causal hypotheses, customer and supply candidates, probabilities, exact actions, tool receipts, verification, uncertainty, policy/scoring/controller versions, and downloadable JSON.
+
+### Grounded interrogation
+
+The **Ask the sealed record** interface answers only from stored evidence and receipts. It does not expose or invent hidden chain-of-thought.
+
+### Counterfactual testing
+
+Judges can change controlled facts, such as replacement inventory or a supply metric, and rerun the same deterministic policy and scoring logic to see whether the decision boundary changes.
+
+### Human oversight
+
+High-value, low-confidence, conflicting, or risky actions pause for an attributed operator decision. Reviewers can approve, reject, modify, add notes, and resume the original run without losing its audit trail.
+
+### Operations optimizer
+
+Allocates constrained inventory and budget across multiple cases, exposes the proposed allocation and trade-offs, and requires confirmation before the sandbox batch executes.
+
+### Evaluation Center
+
+Runs deterministic agency and explainability scenarios and produces machine-readable results so behavior can be compared across controller, policy, and scoring versions.
+
+## Why the system is trustworthy
+
+ResolveX separates probabilistic language understanding from deterministic authority:
+
+- Gemini is optional and limited to free-text intake extraction.
+- Critical facts must be explicit or reviewed; unsupported values are not invented.
+- Policy eligibility, utility, approval thresholds, budgets, inventory, execution, verification, and counterfactuals are deterministic TypeScript.
+- Consequential actions are available only through permissioned, typed tools.
+- Every action has a receipt, and every write is checked through an independent read path.
+- Explanations are assembled from the stored Decision Record, not hidden model reasoning.
+- All bundled customers, orders, payments, messages, and events are synthetic.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  UI[Next.js Control Plane] --> API[Node Route Handlers]
-  API --> G[Gemini structured intake]
-  API --> C[Deterministic Agent Controller]
-  G --> C
-  C --> P[Deterministic Policy + Scoring]
-  C --> T[Zod Tool Registry]
-  T --> DB[(PostgreSQL / Drizzle)]
-  T --> V[Independent Verification Tools]
-  P --> D[Decision Record]
+  UI[Next.js operator interface] --> API[Validated route handlers]
+  API --> I[Optional Gemini intake extraction]
+  API --> C[Bounded agent controller]
+  I --> C
+  C --> E[Policy, scoring, and causal engines]
+  C --> T[Permissioned typed tools]
+  T --> S[(Sandbox state or PostgreSQL)]
+  T --> V[Independent verification tools]
+  E --> D[Decision Record]
   V --> D
   D --> UI
 ```
 
-## Quick start
+## Environment variables
 
-Requirements: Node.js 20.19+ (Node 22 recommended), npm 10+, and optionally Docker Desktop for PostgreSQL.
+| Variable                    | Required   | Purpose                                                                                    |
+| --------------------------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `DATABASE_URL`              | No         | Enables PostgreSQL persistence; omit it for ephemeral sandbox state.                       |
+| `GEMINI_API_KEY`            | No         | Server-only key for free-text intake extraction; never expose it client-side or commit it. |
+| `GEMINI_MODEL`              | No         | Intake model; defaults to `gemini-3.5-flash`.                                              |
+| `APP_URL`                   | No locally | Canonical application URL; the example uses `http://localhost:3000`.                       |
+| `DEMO_MODE`                 | No         | Enables deterministic synthetic demo behavior.                                             |
+| `AUTONOMY_LEVEL`            | No         | Autonomy boundary: `recommend`, `low-risk`, `bounded`, or `sandbox`.                       |
+| `MAX_AUTONOMOUS_REFUND_INR` | No         | Maximum refund allowed without human approval.                                             |
+| `MAX_BATCH_BUDGET_INR`      | No         | Maximum optimizer batch budget before confirmation.                                        |
+| `AGENT_MAX_STEPS`           | No         | Maximum controller steps in a run.                                                         |
+| `AGENT_MAX_RETRIES`         | No         | Maximum bounded retry count.                                                               |
 
-```bash
-npm install
-copy .env.example .env.local
-npm run dev
-```
-
-Open `http://localhost:3000`, then select **Launch the live case**. The demo account is implicit in sandbox mode; no credentials are required.
-
-### Full local PostgreSQL path
-
-```bash
-docker compose up -d
-npm run db:generate
-npm run db:migrate
-npm run data:generate
-npm run db:seed
-```
-
-### Validation
+## Validate the project locally
 
 ```bash
 npm run typecheck
@@ -78,47 +252,23 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-## Environment variables
-
-| Variable                    |   Required | Purpose                                                                        |
-| --------------------------- | ---------: | ------------------------------------------------------------------------------ |
-| `DATABASE_URL`              | Production | PostgreSQL connection string; local UI falls back to transparent sandbox state |
-| `GEMINI_API_KEY`            |         No | Server-only language extraction; manual structured entry is the fallback       |
-| `GEMINI_MODEL`              |         No | Intake model; defaults to `gemini-3.5-flash`                                   |
-| `APP_URL`                   | Production | Canonical deployment URL                                                       |
-| `DEMO_MODE`                 |         No | Enables deterministic synthetic demo data                                      |
-| `AUTONOMY_LEVEL`            |         No | `recommend`, `low-risk`, `bounded`, or `sandbox`                               |
-| `MAX_AUTONOMOUS_REFUND_INR` |         No | Financial approval boundary                                                    |
-| `MAX_BATCH_BUDGET_INR`      |         No | Batch confirmation boundary                                                    |
-
-## Vercel deployment
-
-1. Import `Arawal123/resolvex-agentic-commerce` in Vercel.
-2. Select **Next.js**; root directory is the repository root.
-3. Use Node.js **22.x**, Install Command `npm ci`, Build Command `npm run build`, and Output Directory **Next.js default**.
-4. Provision Neon, Supabase Postgres, or Vercel Marketplace Postgres. Add `DATABASE_URL` to Production, Preview, and Development.
-5. Add `APP_URL`, `DEMO_MODE=true`, `AUTONOMY_LEVEL=bounded`, monetary limits, and optionally the server-only `GEMINI_API_KEY` and `GEMINI_MODEL`.
-6. Run migrations against production before promotion: `npm run db:migrate`; seed only the hackathon/demo environment.
-7. Deploy. `/api/health` should return `status: healthy`.
-
-Every pull request receives a Vercel preview when Git integration is enabled. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the complete specification, rollout, and rollback procedure.
-
 ## Repository map
 
 ```text
-src/app              routes, pages, and server-side APIs
-src/components       cinematic product scenes and interactive workflows
-src/lib/agent        closed-loop controller and decision interrogation
+src/app              pages, layouts, and server-side API routes
+src/components       interactive product scenes and workflows
+src/lib/agent        controller, playbooks, and grounded interrogation
 src/lib/tools        typed read, write, and verification tool registry
-src/lib/decision     scoring, validation, and counterfactual reruns
+src/lib/decision     candidate scoring and counterfactual reruns
+src/lib/supply       supply tracing, diagnosis, and corrective selection
 src/lib/optimization constrained batch allocation
 src/lib/db           Drizzle PostgreSQL schema and lazy connection
-scripts              generation, seeding, reset, import, evaluation
+scripts              data generation, seeding, reset, import, and evaluation
 tests / e2e          unit, integration, and browser journeys
-docs                 architecture, safety, evaluation, dataset, deploy
+docs                 architecture, safety, evaluation, dataset, and deployment
 ```
 
-## Documentation
+## Additional documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Agent design](docs/AGENT_DESIGN.md)
@@ -130,12 +280,8 @@ docs                 architecture, safety, evaluation, dataset, deploy
 - [Security](docs/SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
-## Limitations
+## Production limitation
 
-The bundled operational integrations are deterministic sandbox adapters. Production deployments should replace them with authenticated order-management, payment, warehouse, courier, and messaging connectors while retaining the same typed permission boundary. The local memory fallback is intentionally ephemeral; production writes require PostgreSQL.
-
-## Suggested GitHub topics
-
-`agentic-ai` · `explainable-ai` · `nextjs` · `gemini` · `ecommerce` · `operations` · `drizzle` · `vercel`
+The bundled write integrations are deterministic sandbox adapters. A production deployment should replace them with authenticated order-management, payment, warehouse, courier, and messaging connectors while retaining the same typed permission and verification boundaries.
 
 Licensed under the MIT License.
