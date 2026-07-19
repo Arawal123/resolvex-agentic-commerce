@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
-  ArrowDownRight,
+  ArrowRight,
   CheckCircle2,
   Download,
   FlaskConical,
@@ -10,12 +10,26 @@ import {
   Send,
   Shield,
   Sparkles,
-  XCircle,
 } from "lucide-react";
-import type { CounterfactualResult, DecisionRecord, SupplyCounterfactualResult } from "@/lib/types";
+import type {
+  CandidateAction,
+  CounterfactualResult,
+  DecisionRecord,
+  SupplyCandidate,
+  SupplyCounterfactualResult,
+} from "@/lib/types";
+
+function normalizedProbabilities<T extends { utilityScore: number; valid: boolean }>(items: T[]) {
+  const valid = items.filter((item) => item.valid && item.utilityScore > 0);
+  const weighted = valid.map((item) => ({ item, weight: Math.exp(item.utilityScore * 6) }));
+  const total = weighted.reduce((sum, row) => sum + row.weight, 0);
+  return weighted
+    .map(({ item, weight }) => ({ item, probability: total ? weight / total : 0 }))
+    .sort((a, b) => b.probability - a.probability);
+}
 
 export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
-  const [question, setQuestion] = useState("Why was replacement chosen instead of refund?");
+  const [question, setQuestion] = useState("What went wrong on the supply side?");
   const [answer, setAnswer] = useState("");
   const [asking, setAsking] = useState(false);
   const [inventory, setInventory] = useState(0);
@@ -24,23 +38,34 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
   const [supplyValue, setSupplyValue] = useState(supplyMetric?.replacementValue ?? 0);
   const [supplyCounterfactual, setSupplyCounterfactual] =
     useState<SupplyCounterfactualResult | null>(null);
-  const selected = useMemo(
-    () => decision.candidates.find((item) => item.action === decision.finalAction)!,
-    [decision]
+
+  const customerProbabilities = normalizedProbabilities<CandidateAction>(decision.candidates);
+  const supplyProbabilities = normalizedProbabilities<SupplyCandidate>(
+    decision.supplyDecision?.candidates ?? []
   );
-  const maxScore = Math.max(...decision.candidates.map((item) => item.utilityScore));
+  const selectedSupplyProbability = supplyProbabilities.find(
+    ({ item }) => item.action === decision.supplyDecision?.selectedAction
+  )?.probability;
+  const decisiveMetric = decision.supplyTrace?.metrics.find((metric) =>
+    decision.rootCauseAnalysis?.primaryCause?.decisiveMetricIds.includes(metric.id)
+  );
+
   async function ask() {
     setAsking(true);
-    const response = await fetch("/api/decisions/interrogate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decisionId: decision.id, question }),
-    });
-    const data = await response.json();
-    setAnswer(data.answer);
-    setAsking(false);
+    try {
+      const response = await fetch("/api/decisions/interrogate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decisionId: decision.id, question }),
+      });
+      const data = await response.json();
+      setAnswer(data.answer);
+    } finally {
+      setAsking(false);
+    }
   }
-  async function simulate() {
+
+  async function simulateCustomer() {
     const response = await fetch("/api/decisions/counterfactual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -49,6 +74,7 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
     const data = await response.json();
     setCounterfactual(data.result);
   }
+
   async function simulateSupply() {
     if (!supplyMetric) return;
     const response = await fetch("/api/decisions/counterfactual", {
@@ -64,6 +90,7 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
     const data = await response.json();
     setSupplyCounterfactual(data.result);
   }
+
   function exportRecord() {
     const blob = new Blob([JSON.stringify(decision, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -73,62 +100,23 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
     anchor.click();
     URL.revokeObjectURL(url);
   }
-  return (
-    <div className="studio-grid">
-      <section className="decision-monolith">
-        <div className="monolith-top">
-          <span>FINAL DECISION</span>
-          <button onClick={exportRecord}>
-            <Download size={14} /> Export audit
-          </button>
-        </div>
-        <div className="decision-title">
-          <div className="decision-index">01</div>
-          <div>
-            <h2>{decision.finalAction.replaceAll("_", " ")}</h2>
-            <p>{decision.summary}</p>
-          </div>
-          <div className="confidence-block">
-            <strong>{Math.round(decision.confidence * 100)}%</strong>
-            <span>evidence confidence</span>
-          </div>
-        </div>
-        <div className="goal-strip">
-          <span>CUSTOMER GOAL</span>
-          <p>{decision.customerGoal}</p>
-        </div>
-        <div className="proof-grid">
-          <div>
-            <b>{decision.evidence.length}</b>
-            <span>source-bound facts</span>
-          </div>
-          <div>
-            <b>{decision.candidates.length}</b>
-            <span>alternatives evaluated</span>
-          </div>
-          <div>
-            <b>{decision.toolCalls.length}</b>
-            <span>tool receipts</span>
-          </div>
-          <div>
-            <b>{decision.verification.length}</b>
-            <span>verification checks</span>
-          </div>
-        </div>
-      </section>
 
-      {decision.supplyTrace && decision.rootCauseAnalysis && decision.supplyDecision ? (
-        <section className="studio-section causal-studio-section">
-          <div className="section-intro">
-            <span>02 · SUPPLY CAUSAL TRACE</span>
-            <h3>{decision.rootCauseAnalysis.primaryCause?.label ?? "Inconclusive attribution"}</h3>
-            <p>
-              {decision.rootCauseAnalysis.attribution} at{" "}
-              {Math.round(decision.rootCauseAnalysis.confidence * 100)}% · deterministic sandbox
-              telemetry, not hidden model reasoning.
-            </p>
+  return (
+    <div className="decision-studio-v2">
+      <section className="dual-decision-overview">
+        <header>
+          <div>
+            <span>SEALED DUAL DECISION · {decision.id}</span>
+            <h2>{decision.rootCauseAnalysis?.primaryCause?.label ?? decision.summary}</h2>
+            <p>One shared evidence pass produced an operational diagnosis and a customer remedy.</p>
           </div>
-          <div className="studio-pipeline">
+          <button type="button" onClick={exportRecord}>
+            <Download size={15} /> Export audit
+          </button>
+        </header>
+
+        {decision.supplyTrace && (
+          <div className="decision-pipeline" aria-label="Supply mechanism">
             {decision.supplyTrace.stages.map((stage) => (
               <div key={stage.stage} className={stage.status}>
                 <i />
@@ -136,56 +124,153 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
               </div>
             ))}
           </div>
-          <div className="causal-studio-grid">
-            <div className="metric-ledger">
-              {decision.supplyTrace.metrics.map((metric) => (
-                <article key={metric.id} className={metric.status}>
-                  <div>
-                    <span>
-                      {metric.id} · {metric.stage.replaceAll("_", " ")}
-                    </span>
-                    <strong>{metric.label}</strong>
-                  </div>
-                  <b>
-                    {metric.observed}
-                    {metric.unit}
-                  </b>
-                  <small>
-                    threshold {metric.expected}
-                    {metric.unit}
-                  </small>
-                </article>
-              ))}
-            </div>
-            <div className="cause-ranking">
-              {decision.rootCauseAnalysis.hypotheses.slice(0, 5).map((hypothesis) => (
-                <article key={hypothesis.id}>
-                  <div>
-                    <strong>{hypothesis.label}</strong>
-                    <span>{Math.round(hypothesis.probability * 100)}%</span>
-                  </div>
-                  <i style={{ width: `${hypothesis.probability * 100}%` }} />
-                  <p>{hypothesis.explanation}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-          <details className="supply-remedy-disclosure">
-            <summary>Compare supply corrections</summary>
-            {decision.supplyDecision.candidates.map((candidate) => (
-              <p key={candidate.id}>
-                <span>{candidate.action.replaceAll("_", " ")}</span>
-                <b>{candidate.valid ? candidate.utilityScore.toFixed(3) : "not applicable"}</b>
-              </p>
-            ))}
-          </details>
-          {supplyMetric && (
-            <div className="supply-intervention">
+        )}
+      </section>
+
+      {decision.rootCauseAnalysis && decision.supplyDecision && decision.customerOutcome ? (
+        <section className="dual-decision-lanes" aria-label="Supply and customer decision chains">
+          <article className="decision-chain supply-chain">
+            <header>
               <div>
-                <small>CAUSAL INTERVENTION</small>
-                <strong>{supplyMetric.metricKey}</strong>
-                <p>{supplyMetric.statement}</p>
+                <span>SUPPLY SIDE</span>
+                <h3>Find and correct the failure</h3>
               </div>
+              <strong>{Math.round(decision.rootCauseAnalysis.confidence * 100)}%</strong>
+            </header>
+
+            <div className="chain-sequence">
+              <div className="chain-node">
+                <small>01 · OBSERVED SIGNAL</small>
+                <strong>{decisiveMetric?.label ?? "Reviewed operational telemetry"}</strong>
+                <p>
+                  {decisiveMetric
+                    ? `${decisiveMetric.observed} ${decisiveMetric.unit} observed · threshold ${decisiveMetric.expected} ${decisiveMetric.unit}`
+                    : "No single metric crossed the decisive threshold."}
+                </p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node selected-node">
+                <small>02 · ROOT-CAUSE VERDICT</small>
+                <strong>
+                  {decision.rootCauseAnalysis.primaryCause?.label ?? "Inconclusive attribution"}
+                </strong>
+                <p>
+                  {Math.round(decision.rootCauseAnalysis.confidence * 100)}% probability ·{" "}
+                  {decision.rootCauseAnalysis.attribution}
+                </p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node">
+                <small>03 · CORRECTIVE DECISION</small>
+                <strong>{decision.supplyDecision.selectedAction.replaceAll("_", " ")}</strong>
+                <p>
+                  {Math.round((selectedSupplyProbability ?? 0) * 100)}% normalized selection
+                  probability
+                </p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node verified-node">
+                <small>04 · READ-BACK</small>
+                <CheckCircle2 aria-hidden="true" />
+                <strong>{decision.supplyDecision.executionStatus.replaceAll("_", " ")}</strong>
+                <p>{decision.supplyDecision.verificationIds.length} verification receipt(s)</p>
+              </div>
+            </div>
+
+            <div className="probability-panel">
+              <div className="probability-heading">
+                <span>ROOT-CAUSE PROBABILITIES</span>
+                <small>normalized causal hypotheses</small>
+              </div>
+              {decision.rootCauseAnalysis.hypotheses.slice(0, 4).map((hypothesis) => (
+                <div className="probability-row" key={hypothesis.id}>
+                  <span>{hypothesis.label}</span>
+                  <i>
+                    <b style={{ width: `${hypothesis.probability * 100}%` }} />
+                  </i>
+                  <strong>{Math.round(hypothesis.probability * 100)}%</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="decision-chain customer-chain">
+            <header>
+              <div>
+                <span>CUSTOMER SIDE</span>
+                <h3>Choose the safest useful remedy</h3>
+              </div>
+              <strong>{Math.round(decision.confidence * 100)}%</strong>
+            </header>
+
+            <div className="chain-sequence">
+              <div className="chain-node">
+                <small>01 · CUSTOMER GOAL</small>
+                <strong>{decision.customerGoal}</strong>
+                <p>Grounded in the reviewed message and requested outcome.</p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node selected-node">
+                <small>02 · REMEDY DECISION</small>
+                <strong>{decision.customerOutcome.action.replaceAll("_", " ")}</strong>
+                <p>{Math.round(decision.confidence * 100)}% decision confidence</p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node">
+                <small>03 · EXPECTED RESULT</small>
+                <strong>{decision.customerOutcome.bestSuggestion}</strong>
+                <p>{decision.customerOutcome.expectedResult}</p>
+              </div>
+              <ArrowRight aria-hidden="true" />
+              <div className="chain-node verified-node">
+                <small>04 · OUTCOME STATE</small>
+                <CheckCircle2 aria-hidden="true" />
+                <strong>{decision.customerOutcome.executionStatus.replaceAll("_", " ")}</strong>
+                <p>{decision.customerOutcome.approvalStatus.replaceAll("_", " ")}</p>
+              </div>
+            </div>
+
+            <div className="probability-panel customer-probabilities">
+              <div className="probability-heading">
+                <span>REMEDY SELECTION PROBABILITIES</span>
+                <small>softmax-normalized deterministic utility</small>
+              </div>
+              {customerProbabilities.slice(0, 4).map(({ item, probability }) => (
+                <div className="probability-row" key={item.id}>
+                  <span>{item.action.replaceAll("_", " ")}</span>
+                  <i>
+                    <b style={{ width: `${probability * 100}%` }} />
+                  </i>
+                  <strong>{Math.round(probability * 100)}%</strong>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+      ) : (
+        <section className="legacy-dual-record">
+          <strong>Legacy customer-only record</strong>
+          <p>Run this case again to generate supply attribution and both decision chains.</p>
+        </section>
+      )}
+
+      <details className="decision-audit-disclosure">
+        <summary>
+          <span>
+            <Shield size={17} /> Inspect evidence, interventions, and receipts
+          </span>
+          <small>
+            {decision.evidence.length} facts · {decision.toolCalls.length} calls ·{" "}
+            {decision.verification.length} checks
+          </small>
+        </summary>
+
+        <div className="audit-interventions">
+          {supplyMetric && (
+            <section>
+              <span>SUPPLY COUNTERFACTUAL</span>
+              <h4>{supplyMetric.metricKey}</h4>
+              <p>{supplyMetric.statement}</p>
               <label>
                 Replacement value
                 <input
@@ -195,269 +280,125 @@ export function DecisionStudio({ decision }: { decision: DecisionRecord }) {
                   onChange={(event) => setSupplyValue(Number(event.target.value))}
                 />
               </label>
-              <button onClick={simulateSupply}>
+              <button type="button" onClick={simulateSupply}>
                 <FlaskConical size={15} /> Test intervention
               </button>
               {supplyCounterfactual && (
-                <div className="supply-intervention-result">
+                <div className="audit-result">
                   <strong>
                     {supplyCounterfactual.changed
                       ? "Decision boundary crossed"
                       : "Attribution unchanged"}
                   </strong>
                   <p>{supplyCounterfactual.explanation}</p>
-                  <span>
-                    {supplyCounterfactual.originalAction.replaceAll("_", " ")} →{" "}
-                    {supplyCounterfactual.counterfactualAction.replaceAll("_", " ")}
-                  </span>
                 </div>
               )}
-            </div>
+            </section>
           )}
-        </section>
-      ) : (
-        <section className="studio-section legacy-causal-note">
-          <span>LEGACY RECORD</span>
-          <p>
-            This record predates supply tracing. Re-run its case to generate a dual-lane causal
-            record.
-          </p>
-        </section>
-      )}
 
-      <section className="studio-section evidence-section">
-        <div className="section-intro">
-          <span>02 · EVIDENCE GRAPH</span>
-          <h3>Every claim has an address.</h3>
-          <p>
-            Click-source references map directly to records, tool outputs, policy clauses,
-            calculations, or verification receipts.
-          </p>
-        </div>
-        <div className="evidence-ledger">
-          {decision.evidence.map((item) => (
-            <article id={item.id} key={item.id}>
-              <div className="evidence-id">{item.id}</div>
-              <div>
-                <strong>{item.claim}</strong>
-                <span>
-                  {item.sourceType} · {item.sourceLabel}
-                </span>
-              </div>
-              <code>{String(item.value)}</code>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="studio-section candidates-section">
-        <div className="section-intro">
-          <span>03 · CONTESTED ALTERNATIVES</span>
-          <h3>The winner was earned.</h3>
-          <p>
-            Scores are reproducible from versioned weights. Invalid actions are rejected before
-            selection.
-          </p>
-        </div>
-        <div className="candidate-stack">
-          {[...decision.candidates]
-            .sort((a, b) => b.utilityScore - a.utilityScore)
-            .map((candidate) => (
-              <article
-                key={candidate.id}
-                className={
-                  candidate.action === decision.finalAction ? "candidate selected" : "candidate"
-                }
-              >
-                <div className="candidate-head">
-                  <span>{candidate.id}</span>
-                  <strong>{candidate.action.replaceAll("_", " ")}</strong>
-                  {candidate.valid ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
-                  <b>{candidate.utilityScore.toFixed(3)}</b>
-                </div>
-                <div className="score-track">
-                  <i
-                    style={{
-                      width: `${maxScore ? (candidate.utilityScore / maxScore) * 100 : 0}%`,
-                    }}
-                  />
-                </div>
-                {candidate.rejectionReasons.length > 0 && (
-                  <p>{candidate.rejectionReasons.join(" ")}</p>
-                )}
-              </article>
-            ))}
-        </div>
-      </section>
-
-      <section className="studio-section contribution-section">
-        <div className="section-intro">
-          <span>04 · FACTOR ATTRIBUTION</span>
-          <h3>Utility, decomposed.</h3>
-          <p>
-            {selected.id} · {decision.versions.scoring}
-          </p>
-        </div>
-        <div className="factor-field">
-          {selected.factorContributions.map((factor) => (
-            <div key={factor.factor}>
-              <div className="factor-label">
-                <span>{factor.factor}</span>
-                <em>
-                  {factor.value.toFixed(2)} × {factor.weight.toFixed(2)}
-                </em>
-                <b className={factor.contribution < 0 ? "negative" : ""}>
-                  {factor.contribution > 0 ? "+" : ""}
-                  {factor.contribution.toFixed(3)}
-                </b>
-              </div>
-              <div className="factor-track">
-                <i
-                  className={factor.contribution < 0 ? "negative" : ""}
-                  style={{ width: `${Math.abs(factor.contribution) * 250}%` }}
-                />
-              </div>
-              <small>{factor.evidenceIds.join(" · ")}</small>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="studio-section counterfactual-section">
-        <div className="section-intro">
-          <span>05 · COUNTERFACTUAL LAB</span>
-          <h3>Change reality. Re-run the rules.</h3>
-          <p>This is a deterministic engine rerun, never generated speculation.</p>
-        </div>
-        <div className="counterfactual-lab">
-          <div className="cf-control">
-            <label htmlFor="inventory">Replacement inventory</label>
-            <div>
+          <section>
+            <span>CUSTOMER COUNTERFACTUAL</span>
+            <h4>Replacement inventory</h4>
+            <p>Recompute the customer remedy under a different inventory constraint.</p>
+            <label>
+              Inventory units
               <input
-                id="inventory"
-                type="range"
+                type="number"
                 min="0"
                 max="20"
                 value={inventory}
                 onChange={(event) => setInventory(Number(event.target.value))}
               />
-              <output>{inventory} units</output>
-            </div>
-            <button onClick={simulate}>
+            </label>
+            <button type="button" onClick={simulateCustomer}>
               <FlaskConical size={15} /> Recompute decision
             </button>
-          </div>
-          {counterfactual ? (
-            <div className="cf-result">
-              <div>
-                <span>ORIGINAL</span>
-                <strong>{counterfactual.originalDecision.replaceAll("_", " ")}</strong>
+            {counterfactual && (
+              <div className="audit-result">
+                <strong>COUNTERFACTUAL</strong>
+                <p>
+                  {counterfactual.originalDecision.replaceAll("_", " ")} →{" "}
+                  {counterfactual.counterfactualDecision.replaceAll("_", " ")}
+                </p>
               </div>
-              <ArrowDownRight />
-              <div>
-                <span>COUNTERFACTUAL</span>
-                <strong>{counterfactual.counterfactualDecision.replaceAll("_", " ")}</strong>
-              </div>
-              <p>
-                {counterfactual.smallestDecisionChangingCondition} ·{" "}
-                {counterfactual.policiesTriggered.join(" · ") || "No new policy trigger"}
-              </p>
-            </div>
-          ) : (
-            <div className="cf-placeholder">
-              <Sparkles />
-              <span>Set an alternate inventory value, then recompute.</span>
-            </div>
-          )}
+            )}
+          </section>
         </div>
-      </section>
 
-      <section className="studio-section trace-section">
-        <div className="section-intro">
-          <span>06 · EXECUTION PROOF</span>
-          <h3>Actions, then independent verification.</h3>
-          <p>
-            Successful calls are insufficient on their own. State is read back through separate
-            verification tools.
-          </p>
+        <div className="audit-ledgers">
+          <section>
+            <span>EVIDENCE</span>
+            {decision.evidence.map((item) => (
+              <article key={item.id}>
+                <small>{item.id}</small>
+                <div>
+                  <strong>{item.claim}</strong>
+                  <p>{item.sourceLabel}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+          <section>
+            <span>EXECUTION & VERIFICATION</span>
+            {decision.toolCalls.map((tool) => (
+              <article key={tool.id}>
+                <small>{tool.id}</small>
+                <div>
+                  <strong>{tool.name}</strong>
+                  <p>
+                    {tool.lane ?? "shared"} · {tool.status} · {tool.latencyMs}ms
+                  </p>
+                </div>
+              </article>
+            ))}
+          </section>
         </div>
-        <div className="tool-ledger">
-          {decision.toolCalls.map((tool) => (
-            <article key={tool.id}>
-              <span>{tool.id}</span>
-              <div>
-                <strong>{tool.name}</strong>
-                <small>
-                  {tool.phase} · {tool.latencyMs}ms · {tool.status}
-                </small>
-              </div>
-              <code>{JSON.stringify(tool.output)}</code>
-            </article>
-          ))}
-        </div>
-        <div className="verification-grid">
-          {decision.verification.map((item) => (
-            <article key={item.id}>
-              <Shield size={16} />
-              <div>
-                <span>{item.id}</span>
-                <strong>{item.check}</strong>
-                <p>{item.detail}</p>
-              </div>
-              <CheckCircle2 size={18} />
-            </article>
-          ))}
-        </div>
-      </section>
+      </details>
 
-      <section className="interrogate-panel">
-        <div className="interrogate-copy">
-          <MessageSquareText />
-          <span>07 · ASK ABOUT THIS DECISION</span>
-          <h3>
-            Interrogate the record,
-            <br />
-            not an invented story.
-          </h3>
-          <p>
-            Answers are assembled exclusively from stored evidence, candidate scores, policy checks,
-            tool receipts, and verification results.
-          </p>
+      <section className="decision-question-panel">
+        <div>
+          <MessageSquareText aria-hidden="true" />
+          <span>ASK THE SEALED RECORD</span>
+          <p>Answers use stored evidence and receipts—never invented reasoning.</p>
         </div>
-        <div className="interrogate-chat">
-          <div className="prompt-chips">
+        <div>
+          <div className="decision-question-chips">
             {[
               "What went wrong on the supply side?",
-              "Which policy authorized this?",
-              "What had the greatest influence?",
+              "Why was this customer remedy selected?",
               "Which actions executed?",
             ].map((item) => (
-              <button key={item} onClick={() => setQuestion(item)}>
+              <button type="button" key={item} onClick={() => setQuestion(item)}>
                 {item}
               </button>
             ))}
           </div>
           {answer && (
-            <div className="grounded-answer">
+            <div className="decision-grounded-answer">
               <span>
                 <Sparkles size={13} /> GROUNDED RESPONSE
               </span>
               <p>{answer}</p>
             </div>
           )}
-          <div className="ask-box">
+          <div className="decision-ask-box">
             <textarea
               aria-label="Question about this decision"
               value={question}
               onChange={(event) => setQuestion(event.target.value)}
             />
-            <button onClick={ask} disabled={asking}>
-              <Send size={16} />
-              {asking ? "Retrieving…" : "Ask record"}
+            <button type="button" onClick={ask} disabled={asking}>
+              <Send size={16} /> {asking ? "Retrieving…" : "Ask record"}
             </button>
           </div>
         </div>
       </section>
+
+      <footer className="decision-method-note">
+        Supply percentages are normalized causal hypothesis probabilities. Customer remedy
+        percentages are softmax-normalized deterministic utility scores, not model certainty.
+        Selected customer confidence is shown separately.
+      </footer>
     </div>
   );
 }

@@ -5,6 +5,9 @@ test("guided judge journey reaches a verified decision", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Anniversary gift/ })).toBeVisible();
   await page.getByRole("button", { name: "Run agent" }).click();
   await expect(page.getByText("PRIORITY REPLACEMENT").first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("link", { name: /Open Decision Studio/ })).toBeVisible({
+    timeout: 30000,
+  });
   await expect(
     page.getByRole("strong").filter({ hasText: "Line-haul hub dwell breach" }).first()
   ).toBeVisible();
@@ -12,7 +15,13 @@ test("guided judge journey reaches a verified decision", async ({ page }) => {
   await expect(page.getByText("CUSTOMER SIDE")).toBeVisible();
   await page.getByRole("link", { name: /Open Decision Studio/ }).click();
   await expect(page.getByRole("heading", { name: "A decision you can challenge." })).toBeVisible();
-  await expect(page.getByText("SUPPLY CAUSAL TRACE")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Find and correct the failure" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Choose the safest useful remedy" })
+  ).toBeVisible();
+  await expect(page.getByText("ROOT-CAUSE PROBABILITIES")).toBeVisible();
+  await expect(page.getByText("REMEDY SELECTION PROBABILITIES")).toBeVisible();
+  await page.getByText("Inspect evidence, interventions, and receipts").click();
   await page.getByRole("button", { name: "Test intervention" }).click();
   await expect(page.getByText("Decision boundary crossed")).toBeVisible();
   await page.getByRole("button", { name: "Recompute decision" }).click();
